@@ -1,12 +1,12 @@
 "use client";
 
 import { Droplets, Hourglass, Repeat, type LucideIcon } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useMemo, useSyncExternalStore, type ReactNode } from "react";
+import { computeStats } from "@/lib/analytics";
 import { cn } from "@/lib/cn";
-import type { MyStats } from "@/lib/services/stats";
+import { getCurrentUser, listEntries, useDb } from "@/lib/local-db";
 import { formatCount, formatDurationJa, formatMl } from "@/lib/time";
 import { CalendarView } from "./calendar-view";
-import { useBrowserTimeZone, useJson } from "./hooks";
 import { HourlyChart } from "./hourly-chart";
 import { RecentEntries } from "./recent-entries";
 import { TopTags } from "./top-tags";
@@ -46,21 +46,34 @@ function StatTile({
   );
 }
 
+const noopSubscribe = () => () => {};
+
+/** The browser's IANA time zone (null on the server / during hydration). */
+function useBrowserTimeZone(): string | null {
+  return useSyncExternalStore(
+    noopSubscribe,
+    () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+    () => null,
+  );
+}
+
 export function MyDashboard() {
   // The browser's time zone sets the hour-of-day buckets and calendar dates
   const timeZone = useBrowserTimeZone();
-  const [version, setVersion] = useState(0);
-  const statsUrl = timeZone ? `/api/me/stats?tz=${encodeURIComponent(timeZone)}` : null;
-  const { data: stats, error, loading } = useJson<MyStats>(statsUrl, version);
+  const entries = useDb(() => {
+    const user = getCurrentUser();
+    return user ? listEntries(user.id) : [];
+  });
+  const stats = useMemo(
+    () => (entries && timeZone ? computeStats(entries, timeZone) : null),
+    [entries, timeZone],
+  );
 
-  if (error && !stats) {
-    return <p className="rounded-2xl bg-red-500/10 p-4 text-sm text-red-300">{error}</p>;
-  }
-  if (!stats || !timeZone) return <DashboardSkeleton />;
+  if (!stats || !entries || !timeZone) return <DashboardSkeleton />;
 
   const { summary } = stats;
   return (
-    <div className={cn("space-y-4 transition-opacity sm:space-y-6", loading && "opacity-70")}>
+    <div className="space-y-4 sm:space-y-6">
       <div className="grid gap-3 sm:grid-cols-3 sm:gap-4">
         <StatTile
           icon={Repeat}
@@ -107,10 +120,10 @@ export function MyDashboard() {
 
       <div className="grid items-start gap-4 sm:gap-6 lg:grid-cols-5">
         <Card className="lg:col-span-3">
-          <CalendarView timeZone={timeZone} version={version} />
+          <CalendarView timeZone={timeZone} entries={entries} />
         </Card>
         <Card className="lg:col-span-2">
-          <RecentEntries version={version} onChanged={() => setVersion((v) => v + 1)} />
+          <RecentEntries entries={entries} />
         </Card>
       </div>
 

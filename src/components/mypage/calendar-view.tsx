@@ -1,12 +1,10 @@
 "use client";
 
 import { CalendarDays, ChevronLeft, ChevronRight, Droplet } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { computeCalendar, todayIn } from "@/lib/analytics";
 import { cn } from "@/lib/cn";
-import type { MyCalendar } from "@/lib/services/stats";
-import { useJson } from "./hooks";
-
-type CalendarResponse = MyCalendar & { today: { year: number; month: number; day: number } };
+import type { LocalEntry } from "@/lib/local-db";
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 
@@ -19,10 +17,15 @@ const toParam = ({ year, month }: { year: number; month: number }) =>
   `${year}-${String(month).padStart(2, "0")}`;
 
 /** Monthly calendar: days with entries get a stamp, plus a count badge when there are several. */
-export function CalendarView({ timeZone, version }: { timeZone: string; version: number }) {
+export function CalendarView({ timeZone, entries }: { timeZone: string; entries: LocalEntry[] }) {
   const [month, setMonth] = useState<string | null>(null);
-  const url = `/api/me/calendar?tz=${encodeURIComponent(timeZone)}${month ? `&month=${month}` : ""}`;
-  const { data, loading, error } = useJson<CalendarResponse>(url, version);
+  const data = useMemo(() => {
+    const today = todayIn(timeZone);
+    const [y, m] = month ? month.split("-").map(Number) : [today.year, today.month];
+    return { ...computeCalendar(entries, timeZone, y, m), today };
+  }, [entries, timeZone, month]);
+  const loading = false;
+  const error: string | null = null;
 
   const isCurrentMonth = data ? data.year === data.today.year && data.month === data.today.month : true;
   const activeDays = data ? data.counts.filter((c) => c > 0).length : 0;

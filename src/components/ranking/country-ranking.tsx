@@ -1,7 +1,7 @@
 import { Sparkles } from "lucide-react";
 import { Flag } from "@/components/flag";
 import { cn } from "@/lib/cn";
-import type { CountryRanking } from "@/lib/services/ranking";
+import type { CountryRanking } from "@/lib/ranking";
 import { formatCount, formatMl } from "@/lib/time";
 import { RankBadge } from "./rank-badge";
 

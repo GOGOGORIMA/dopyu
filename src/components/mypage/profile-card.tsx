@@ -1,11 +1,15 @@
+"use client";
+
 import { Droplet } from "lucide-react";
 import { Flag } from "@/components/flag";
-import { requireUser, toProfile } from "@/lib/auth/dal";
+import { getCurrentUser, toProfile, useDb } from "@/lib/local-db";
 import { VOLUME_BRACKETS } from "@/lib/volume";
 
-/** Profile summary (reads the session, so render it inside Suspense). */
-export async function ProfileCard() {
-  const profile = toProfile(await requireUser());
+/** Profile summary of the logged-in user. */
+export function ProfileCard() {
+  const user = useDb(() => getCurrentUser());
+  if (!user) return <ProfileCardSkeleton />;
+  const profile = toProfile(user);
 
   return (
     <section className="flex flex-col gap-4 rounded-3xl border border-line bg-surface p-5 sm:flex-row sm:items-center sm:justify-between">

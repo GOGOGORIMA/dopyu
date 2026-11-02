@@ -1,10 +1,11 @@
 "use client";
 
 import { History, LoaderCircle, Trash2, TriangleAlert } from "lucide-react";
-import { useState } from "react";
-import type { MyEntry } from "@/lib/services/entries";
+import { useMemo, useState } from "react";
+import { deleteEntry, type LocalEntry } from "@/lib/local-db";
 import { formatDurationJa, formatMl } from "@/lib/time";
-import { useJson } from "./hooks";
+
+type MyEntry = LocalEntry;
 
 const dateFormat = new Intl.DateTimeFormat("ja-JP", {
   month: "numeric",
@@ -15,8 +16,12 @@ const dateFormat = new Intl.DateTimeFormat("ja-JP", {
 });
 
 /** Recent entries (visible only to you). Entries saved by mistake can be deleted. */
-export function RecentEntries({ version, onChanged }: { version: number; onChanged: () => void }) {
-  const { data, error } = useJson<{ entries: MyEntry[] }>("/api/entries?limit=10", version);
+export function RecentEntries({ entries }: { entries: LocalEntry[] }) {
+  const data = useMemo(
+    () => ({ entries: [...entries].sort((a, b) => b.completedAt.localeCompare(a.completedAt)).slice(0, 10) }),
+    [entries],
+  );
+  const error: string | null = null;
   const [deleting, setDeleting] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
@@ -25,9 +30,7 @@ export function RecentEntries({ version, onChanged }: { version: number; onChang
     setDeleting(entry.id);
     setDeleteError(null);
     try {
-      const res = await fetch(`/api/entries/${encodeURIComponent(entry.id)}`, { method: "DELETE" });
-      if (!res.ok) throw new Error();
-      onChanged();
+      deleteEntry(entry.id);
     } catch {
       setDeleteError("削除に失敗しました");
     } finally {

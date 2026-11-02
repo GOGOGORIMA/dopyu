@@ -1,12 +1,14 @@
+"use client";
+
 import { Flag } from "@/components/flag";
-import { getCurrentUser } from "@/lib/auth/dal";
 import { getCountryName } from "@/lib/countries";
+import { useCurrentUser } from "@/lib/local-db";
 import { LogoutButton } from "./logout-button";
 
-/** Logged-in user's chip in the header (reads the session, so render it inside Suspense). */
-export async function UserMenu() {
-  const user = await getCurrentUser();
-  if (!user) return null;
+/** Logged-in user's chip in the header. */
+export function UserMenu() {
+  const user = useCurrentUser();
+  if (!user) return <div className="h-9 w-36 animate-pulse rounded-full bg-surface" aria-hidden />;
 
   return (
     <div className="flex items-center gap-1.5">
@@ -17,8 +19,4 @@ export async function UserMenu() {
       <LogoutButton />
     </div>
   );
-}
-
-export function UserMenuSkeleton() {
-  return <div className="h-9 w-36 animate-pulse rounded-full bg-surface" aria-hidden />;
 }

@@ -159,3 +159,9 @@ export function formatMl(value: number): string {
 export function formatCount(value: number): string {
   return value.toLocaleString("ja-JP");
 }
+
+/**
+ * Time zone that sets the ranking's yearly period (Jan 1 to Dec 31).
+ * Fixed at build time (NEXT_PUBLIC_APP_TIME_ZONE), default Asia/Tokyo.
+ */
+export const APP_TIME_ZONE = resolveTimeZone(process.env.NEXT_PUBLIC_APP_TIME_ZONE, DEFAULT_TIME_ZONE);

@@ -2,10 +2,13 @@
 
 import { Cake, Droplet, Globe, KeyRound, LoaderCircle, Mail, UserRound } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { Field, inputClass } from "@/components/ui/field";
 import { MIN_AGE, MIN_PASSWORD_LENGTH } from "@/lib/constants";
 import type { CountryOption } from "@/lib/countries";
+import { DUMMY_USERS } from "@/lib/dummy-data";
+import { FormError, registerUser } from "@/lib/local-db";
 import { calculateAge, estimateVolumeMlByAge } from "@/lib/volume";
 
 type Preview = { age: number; volumeMl: number } | null;
@@ -20,6 +23,7 @@ function previewFromBirthDate(value: string): Preview {
 }
 
 export function RegisterForm({ countries }: { countries: CountryOption[] }) {
+  const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -32,27 +36,21 @@ export function RegisterForm({ countries }: { countries: CountryOption[] }) {
     setError(null);
     setFieldErrors({});
     try {
-      const res = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      await registerUser(
+        {
           email: form.get("email"),
           password: form.get("password"),
           username: form.get("username"),
           birthDate: form.get("birthDate"),
           countryCode: form.get("countryCode"),
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error ?? "登録に失敗しました");
-        setFieldErrors(data.fieldErrors ?? {});
-        setPending(false);
-        return;
-      }
-      window.location.replace("/");
-    } catch {
-      setError("通信に失敗しました。もう一度お試しください。");
+        },
+        // Built-in ranking users' names cannot be taken
+        DUMMY_USERS.map((u) => u.username),
+      );
+      router.replace("/");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "登録に失敗しました");
+      setFieldErrors(err instanceof FormError ? err.fieldErrors : {});
       setPending(false);
     }
   }

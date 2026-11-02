@@ -1,8 +1,7 @@
 import { Lock } from "lucide-react";
 import type { Metadata } from "next";
-import { Suspense } from "react";
 import { MyDashboard } from "@/components/mypage/dashboard";
-import { ProfileCard, ProfileCardSkeleton } from "@/components/mypage/profile-card";
+import { ProfileCard } from "@/components/mypage/profile-card";
 
 export const metadata: Metadata = { title: "マイページ" };
 
@@ -19,10 +18,8 @@ export default function MyPage() {
           あなただけに表示
         </span>
       </div>
-      <Suspense fallback={<ProfileCardSkeleton />}>
-        <ProfileCard />
-      </Suspense>
-      {/* Hours of day use the browser's time zone, so data is fetched on the client */}
+      <ProfileCard />
+      {/* Everything is computed in the browser from this browser's localStorage */}
       <MyDashboard />
     </div>
   );

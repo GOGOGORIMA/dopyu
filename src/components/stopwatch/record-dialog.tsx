@@ -1,17 +1,14 @@
 "use client";
 
 import { CalendarDays, Hourglass, LoaderCircle, Lock, TriangleAlert, X } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { MIN_RANKABLE_SECONDS } from "@/lib/constants";
+import { createEntry, getCurrentUser, listMyTags, useDb } from "@/lib/local-db";
 import { normalizeTagName } from "@/lib/tags";
 import { formatDurationJa } from "@/lib/time";
 import { TagPicker, type TagSuggestion } from "./tag-picker";
 
-export type SavedEntryResult = {
-  entry: { id: string; volumeMl: number; isRankable: boolean; tags: string[] };
-  warning: string | null;
-};
+export type SavedEntryResult = ReturnType<typeof createEntry>;
 
 const dateTimeFormat = new Intl.DateTimeFormat("ja-JP", {
   year: "numeric",
@@ -34,10 +31,8 @@ export function RecordDialog({
   onCancel: () => void;
   onSaved: (result: SavedEntryResult) => void;
 }) {
-  const router = useRouter();
   const titleId = useId();
   const dialogRef = useRef<HTMLDialogElement>(null);
-  const [suggestions, setSuggestions] = useState<TagSuggestion[] | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
@@ -51,24 +46,13 @@ export function RecordDialog({
     return () => dialog?.close();
   }, []);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    fetch("/api/tags", { signal: controller.signal })
-      .then(async (res) => {
-        if (res.status === 401) {
-          router.replace("/login");
-          return;
-        }
-        const data: { tags?: TagSuggestion[] } = await res.json();
-        setSuggestions(data.tags ?? []);
-      })
-      .catch((err: unknown) => {
-        if (!(err instanceof DOMException && err.name === "AbortError")) setSuggestions([]);
-      });
-    return () => controller.abort();
-  }, [router]);
+  // Past tags come from this browser's localStorage (only the user's own)
+  const suggestions = useDb<TagSuggestion[]>(() => {
+    const user = getCurrentUser();
+    return user ? listMyTags(user.id) : [];
+  });
 
-  async function handleSubmit(event: FormEvent) {
+  function handleSubmit(event: FormEvent) {
     event.preventDefault();
     if (saving) return;
     setSaving(true);
@@ -79,28 +63,14 @@ export function RecordDialog({
     const tags = pending && !selected.includes(pending) ? [...selected, pending] : selected;
 
     try {
-      const res = await fetch("/api/entries", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          completedAt: new Date(completedAt).toISOString(),
-          durationSeconds,
-          tags,
-        }),
+      const result = createEntry({
+        completedAt: new Date(completedAt).toISOString(),
+        durationSeconds,
+        tags,
       });
-      if (res.status === 401) {
-        router.replace("/login");
-        return;
-      }
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error ?? "保存に失敗しました");
-        setSaving(false);
-        return;
-      }
-      onSaved(data as SavedEntryResult);
-    } catch {
-      setError("通信に失敗しました。電波の良い場所でもう一度お試しください。");
+      onSaved(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "保存に失敗しました");
       setSaving(false);
     }
   }

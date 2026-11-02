@@ -1,7 +1,7 @@
 import { Crown, Medal, Sparkles } from "lucide-react";
 import { Flag } from "@/components/flag";
 import { cn } from "@/lib/cn";
-import type { UserRanking, UserRankingRow } from "@/lib/services/ranking";
+import type { UserRanking, UserRankingRow } from "@/lib/ranking";
 import { formatCount, formatMl } from "@/lib/time";
 import { RankBadge } from "./rank-badge";
 

@@ -1,9 +1,12 @@
 "use client";
 
-import { KeyRound, LoaderCircle, Mail } from "lucide-react";
+import { KeyRound, LoaderCircle, Mail, Sparkles } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { Field, inputClass } from "@/components/ui/field";
+import { generateDemoEntries } from "@/lib/dummy-data";
+import { FormError, loginAsDemo, loginUser } from "@/lib/local-db";
 
 /** Only allow same-site relative paths after login (prevents open redirects). */
 function safeNextPath(): string {
@@ -12,6 +15,7 @@ function safeNextPath(): string {
 }
 
 export function LoginForm() {
+  const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -23,23 +27,23 @@ export function LoginForm() {
     setError(null);
     setFieldErrors({});
     try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: form.get("email"), password: form.get("password") }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error ?? "ログインに失敗しました");
-        setFieldErrors(data.fieldErrors ?? {});
-        setPending(false);
-        return;
-      }
-      // Full navigation so every screen is re-rendered with the new session
-      // (a client-side refresh would re-prefetch auth pages, which the proxy then redirects)
-      window.location.replace(safeNextPath());
-    } catch {
-      setError("通信に失敗しました。もう一度お試しください。");
+      await loginUser({ email: form.get("email"), password: form.get("password") });
+      router.replace(safeNextPath());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "ログインに失敗しました");
+      setFieldErrors(err instanceof FormError ? err.fieldErrors : {});
+      setPending(false);
+    }
+  }
+
+  async function handleDemo() {
+    setPending(true);
+    setError(null);
+    try {
+      await loginAsDemo((birthDate) => generateDemoEntries(birthDate));
+      router.replace("/");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "デモの準備に失敗しました");
       setPending(false);
     }
   }
@@ -90,6 +94,16 @@ export function LoginForm() {
       >
         {pending && <LoaderCircle className="size-4 animate-spin" aria-hidden />}
         ログイン
+      </button>
+
+      <button
+        type="button"
+        onClick={handleDemo}
+        disabled={pending}
+        className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-line-strong bg-surface-2 text-sm font-semibold text-ink transition hover:bg-surface-3 disabled:opacity-60"
+      >
+        <Sparkles className="size-4 text-violet" aria-hidden />
+        デモアカウントで試す（サンプル記録つき）
       </button>
 
       <p className="text-center text-sm text-ink-2">
