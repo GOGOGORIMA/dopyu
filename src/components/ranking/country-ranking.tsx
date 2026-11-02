@@ -1,12 +1,16 @@
 import { Sparkles } from "lucide-react";
 import { Flag } from "@/components/flag";
 import { cn } from "@/lib/cn";
-import type { CountryRanking } from "@/lib/ranking";
-import { formatCount, formatMl } from "@/lib/time";
+import { METRIC_LABEL, type CountryRanking, type CountryRankingRow, type RankingMetric } from "@/lib/ranking";
+import { formatCount } from "@/lib/time";
+import { METRIC_COLUMNS, MetricValue, metricColumnClass } from "./metric-format";
 import { RankBadge } from "./rank-badge";
 
+const valueOf = (row: CountryRankingRow, metric: RankingMetric) =>
+  metric === "volume" ? row.totalVolumeMl : metric === "average" ? row.averageVolumeMl : row.count;
+
 export function CountryRankingView({ ranking }: { ranking: CountryRanking }) {
-  const sortedByAverage = ranking.sort === "average";
+  const { metric } = ranking;
 
   if (ranking.rows.length === 0) {
     return (
@@ -17,43 +21,36 @@ export function CountryRankingView({ ranking }: { ranking: CountryRanking }) {
     );
   }
 
-  const activeHead = "text-ink";
-  const activeCell = "font-bold text-ink";
-
   return (
     <div className="overflow-hidden rounded-3xl border border-line bg-surface">
       <table className="w-full table-fixed text-sm">
-        <caption className="sr-only">
-          国別ワールドカップ（{sortedByAverage ? "1人あたり平均推定量" : "国全体の推定総量"}順）
-        </caption>
+        <caption className="sr-only">国別ワールドカップ（{METRIC_LABEL[metric]}順）</caption>
         <thead>
           <tr className="text-left text-xs text-muted">
             <th scope="col" className="w-14 py-2.5 pl-3 font-medium sm:w-16 sm:pl-4">順位</th>
             <th scope="col" className="py-2.5 font-medium">国</th>
-            <th scope="col" className="hidden w-20 py-2.5 pr-3 text-right font-medium sm:table-cell">人数</th>
-            <th scope="col" className="hidden w-24 py-2.5 pr-3 text-right font-medium sm:table-cell">総回数</th>
-            <th
-              scope="col"
-              aria-sort={sortedByAverage ? "descending" : undefined}
-              className={cn("w-[4.5rem] py-2.5 pr-2 text-right font-medium sm:w-24 sm:pr-3", sortedByAverage && activeHead)}
-            >
-              平均
-            </th>
-            <th
-              scope="col"
-              aria-sort={!sortedByAverage ? "descending" : undefined}
-              className={cn("w-[5.5rem] py-2.5 pr-3 text-right font-medium sm:w-28 sm:pr-4", !sortedByAverage && activeHead)}
-            >
-              推定総量
-            </th>
+            <th scope="col" className="hidden w-20 py-2.5 pr-3 text-right font-medium sm:table-cell">参加人数</th>
+            {METRIC_COLUMNS.map((column, i) => (
+              <th
+                key={column}
+                scope="col"
+                aria-sort={column === metric ? "descending" : undefined}
+                className={cn(
+                  "py-2.5 text-right font-medium",
+                  column === "count" ? "w-[4.5rem] sm:w-24" : "w-[5.5rem] sm:w-28",
+                  i === METRIC_COLUMNS.length - 1 ? "pr-3 sm:pr-4" : "pr-2 sm:pr-3",
+                  metricColumnClass(column, metric),
+                  column === metric && "text-ink",
+                )}
+              >
+                {METRIC_LABEL[column]}
+              </th>
+            ))}
           </tr>
         </thead>
         <tbody>
           {ranking.rows.map((row) => (
-            <tr
-              key={row.countryCode}
-              className={cn("border-t border-line", row.isMyCountry && "bg-accent/[0.07]")}
-            >
+            <tr key={row.countryCode} className={cn("border-t border-line", row.isMyCountry && "bg-accent/[0.07]")}>
               <td className="py-3 pr-1 pl-3 sm:pl-4">
                 <RankBadge rank={row.rank} />
               </td>
@@ -71,30 +68,31 @@ export function CountryRankingView({ ranking }: { ranking: CountryRanking }) {
                         </span>
                       )}
                     </div>
-                    {/* On phones, people, total count and the "所属国" badge fold into a sub-line */}
+                    {/* On phones, participants and the "所属国" badge fold into a sub-line */}
                     <div className="truncate text-[11px] text-muted sm:hidden">
                       {row.isMyCountry && <span className="font-bold text-accent">所属国 · </span>}
-                      {formatCount(row.memberCount)}人 · {formatCount(row.count)}回
+                      参加{formatCount(row.activeMemberCount)}/{formatCount(row.memberCount)}人
                     </div>
                   </div>
                 </div>
               </td>
               <td className="hidden py-3 pr-3 text-right text-ink-2 tabular-nums sm:table-cell">
-                {formatCount(row.memberCount)}
-                <span className="ml-0.5 text-xs text-muted">人</span>
+                {formatCount(row.activeMemberCount)}
+                <span className="text-xs text-muted">/{formatCount(row.memberCount)}人</span>
               </td>
-              <td className="hidden py-3 pr-3 text-right text-ink-2 tabular-nums sm:table-cell">
-                {formatCount(row.count)}
-                <span className="ml-0.5 text-xs text-muted">回</span>
-              </td>
-              <td className={cn("py-3 pr-2 text-right text-[13px] whitespace-nowrap text-ink-2 tabular-nums sm:pr-3 sm:text-sm", sortedByAverage && activeCell)}>
-                {row.averageVolumeMl.toFixed(1)}
-                <span className="ml-0.5 text-xs font-normal text-muted">ml</span>
-              </td>
-              <td className={cn("py-3 pr-3 text-right text-[13px] whitespace-nowrap text-ink-2 tabular-nums sm:pr-4 sm:text-sm", !sortedByAverage && activeCell)}>
-                {formatMl(row.totalVolumeMl)}
-                <span className="ml-0.5 text-xs font-normal text-muted">ml</span>
-              </td>
+              {METRIC_COLUMNS.map((column, i) => (
+                <td
+                  key={column}
+                  className={cn(
+                    "py-3 text-right text-[13px] text-ink-2 sm:text-sm",
+                    i === METRIC_COLUMNS.length - 1 ? "pr-3 sm:pr-4" : "pr-2 sm:pr-3",
+                    metricColumnClass(column, metric),
+                    column === metric && "font-bold text-ink",
+                  )}
+                >
+                  <MetricValue metric={column} value={valueOf(row, column)} scope="country" />
+                </td>
+              ))}
             </tr>
           ))}
         </tbody>
