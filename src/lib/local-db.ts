@@ -5,7 +5,7 @@ import { getCountryName } from "./countries";
 import { normalizeTagList } from "./tags";
 import { createEntrySchema, loginSchema, registerSchema, toFieldErrors } from "./validation";
 import { calculateAge, estimateVolumeMl, estimateVolumeMlByAge } from "./volume";
-import { MIN_RANKABLE_SECONDS } from "./constants";
+import { EXCLUSION_LABEL, judgeRanking, type RankingExclusionReason } from "./ranking-rules";
 import { APP_TIME_ZONE } from "./time";
 
 /**
@@ -33,10 +33,17 @@ export type LocalUser = {
 
 export type LocalEntry = {
   id: string;
+  /** When the stopwatch was started (startTime) */
+  startTime: string;
+  /** When "finish" was pressed (endTime) */
   completedAt: string;
+  /** Measured seconds (paused time excluded) */
   durationSeconds: number;
   volumeMl: number;
-  isRankable: boolean;
+  /** Counted in the yearly / country rankings. Always shown on My Page either way */
+  isRanked: boolean;
+  /** Why it is not ranked (null when ranked) */
+  rankExclusion: RankingExclusionReason | null;
   tags: string[];
 };
 
@@ -209,8 +216,20 @@ export function logout() {
 // ---------------------------------------------------------------------------
 // Entries & tags (always scoped to the logged-in user)
 // ---------------------------------------------------------------------------
+type StoredEntry = Partial<LocalEntry> & { isRankable?: boolean };
+
+/** Reads entries, upgrading ones saved by older versions (isRankable -> isRanked). */
 export function listEntries(userId: string): LocalEntry[] {
-  return readJson<LocalEntry[]>(entriesKey(userId), []);
+  return readJson<StoredEntry[]>(entriesKey(userId), []).map((e) => ({
+    id: String(e.id),
+    startTime: e.startTime ?? String(e.completedAt),
+    completedAt: String(e.completedAt),
+    durationSeconds: Number(e.durationSeconds) || 0,
+    volumeMl: Number(e.volumeMl) || 0,
+    isRanked: e.isRanked ?? e.isRankable ?? true,
+    rankExclusion: e.rankExclusion ?? null,
+    tags: Array.isArray(e.tags) ? e.tags : [],
+  }));
 }
 
 function requireUser(): LocalUser {
@@ -219,10 +238,24 @@ function requireUser(): LocalUser {
   return user;
 }
 
-export function createEntry(raw: { completedAt: string; durationSeconds: number; tags: string[] }): {
+export type SaveResult = {
   entry: LocalEntry;
-  warning: string | null;
-} {
+  /** Short reason label when the entry is My Page only (e.g. "クールダウン中"), otherwise null */
+  exclusionLabel: string | null;
+};
+
+/**
+ * Saves an entry. Every valid entry is saved (it always appears on My Page);
+ * isRanked decides whether it also counts toward the rankings.
+ * Throws FormError for invalid or tampered data (start/finish timestamps vs. measured time).
+ */
+export function createEntry(raw: {
+  startTime: string;
+  completedAt: string;
+  durationSeconds: number;
+  pausedSeconds: number;
+  tags: string[];
+}): SaveResult {
   const user = requireUser();
   const parsed = createEntrySchema.safeParse(raw);
   if (!parsed.success) {
@@ -230,25 +263,23 @@ export function createEntry(raw: { completedAt: string; durationSeconds: number;
     throw new FormError(Object.values(fieldErrors)[0] ?? "入力内容を確認してください", fieldErrors);
   }
   const input = parsed.data;
+  const history = listEntries(user.id);
+  const decision = judgeRanking(history, input.completedAt, input.durationSeconds);
   const birth = new Date(`${user.birthDate}T00:00:00.000Z`);
   const entry: LocalEntry = {
     id: newId(),
+    startTime: input.startTime.toISOString(),
     completedAt: input.completedAt.toISOString(),
     durationSeconds: input.durationSeconds,
     // Snapshot of the estimated volume at the user's age when recorded
     volumeMl: estimateVolumeMl(birth, input.completedAt, APP_TIME_ZONE),
-    // Anti-cheat: under 10 seconds is excluded from rankings
-    isRankable: input.durationSeconds >= MIN_RANKABLE_SECONDS,
+    isRanked: decision.isRanked,
+    rankExclusion: decision.reason,
     tags: input.tags,
   };
-  writeJson(entriesKey(user.id), [...listEntries(user.id), entry]);
+  writeJson(entriesKey(user.id), [...history, entry]);
   emit();
-  return {
-    entry,
-    warning: entry.isRankable
-      ? null
-      : `計測時間が${MIN_RANKABLE_SECONDS}秒未満のため、この記録はランキング集計の対象外です`,
-  };
+  return { entry, exclusionLabel: decision.reason ? EXCLUSION_LABEL[decision.reason] : null };
 }
 
 export function deleteEntry(entryId: string) {

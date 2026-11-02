@@ -1,9 +1,10 @@
 "use client";
 
-import { CircleCheck, Flag, Pause, Play, RotateCcw, TriangleAlert, X } from "lucide-react";
+import { CircleCheck, Flag, Pause, Play, RotateCcw, Trophy, TriangleAlert, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { formatMl } from "@/lib/time";
+import { RankingStatusBadges } from "./ranking-status";
 import { RecordDialog, type SavedEntryResult } from "./record-dialog";
 import { getElapsedMs, stopwatch, useStopwatchState } from "./stopwatch-store";
 
@@ -31,7 +32,7 @@ const STATUS_LABEL = {
   finished: "記録待ち",
 } as const;
 
-type Toast = { title: string; detail: string; warning: string | null };
+type Toast = { ranked: boolean; detail: string; reason: string | null };
 
 export function StopwatchPanel() {
   const state = useStopwatchState();
@@ -63,9 +64,9 @@ export function StopwatchPanel() {
   function handleSaved(result: SavedEntryResult) {
     stopwatch.reset();
     setToast({
-      title: "記録しました！",
+      ranked: result.entry.isRanked,
       detail: `推定 ${formatMl(result.entry.volumeMl)}ml を記録`,
-      warning: result.warning,
+      reason: result.exclusionLabel,
     });
   }
 
@@ -73,6 +74,7 @@ export function StopwatchPanel() {
 
   return (
     <section aria-label="ストップウォッチ" className="flex flex-col items-center">
+      <RankingStatusBadges />
       {/* Ring and time readout */}
       <div className="relative aspect-square w-full max-w-[19rem]">
         <svg viewBox="0 0 300 300" className="absolute inset-0 size-full -rotate-90" aria-hidden>
@@ -175,13 +177,15 @@ export function StopwatchPanel() {
       <p className="mt-5 max-w-sm text-center text-xs leading-relaxed text-muted">
         計測中にページを再読み込みしたりタブを閉じたりしても、計測は止まりません。
         <br />
-        10秒未満の記録はランキング集計の対象外になります。
+        記録はすべてマイページに保存されます。ランキング集計の対象になるのは、計測120分以内・前回の記録から30分経過後・1日5回までの記録です。
       </p>
 
       {state.status === "finished" && state.finishedAt !== null && (
         <RecordDialog
+          startedAt={state.startedAt ?? state.finishedAt - state.accumulatedMs - state.pausedMs}
           completedAt={state.finishedAt}
           durationSeconds={Math.floor(state.accumulatedMs / 1000)}
+          pausedSeconds={Math.round(state.pausedMs / 1000)}
           onCancel={() => stopwatch.cancelFinish()}
           onSaved={handleSaved}
         />
@@ -193,16 +197,24 @@ export function StopwatchPanel() {
           className="fixed inset-x-4 bottom-24 z-40 mx-auto max-w-sm animate-pop rounded-2xl border border-line-strong bg-surface-2/95 p-4 shadow-2xl shadow-black/50 backdrop-blur md:bottom-8"
         >
           <div className="flex items-start gap-3">
-            <CircleCheck className="mt-0.5 size-5 shrink-0 text-accent" aria-hidden />
+            {toast.ranked ? (
+              <Trophy className="mt-0.5 size-5 shrink-0 text-accent" aria-hidden />
+            ) : (
+              <CircleCheck className="mt-0.5 size-5 shrink-0 text-amber-300" aria-hidden />
+            )}
             <div className="min-w-0 flex-1">
-              <p className="font-semibold">{toast.title}</p>
-              <p className="text-sm text-ink-2">{toast.detail}</p>
-              {toast.warning && (
-                <p className="mt-2 flex items-start gap-1.5 text-xs text-amber-300">
+              <p className="font-semibold">記録しました！</p>
+              {toast.ranked ? (
+                <p className="mt-1 inline-flex rounded-full bg-accent/15 px-2.5 py-0.5 text-xs font-bold text-accent">
+                  ランキング集計対象として登録
+                </p>
+              ) : (
+                <p className="mt-1 flex items-start gap-1.5 text-xs font-semibold text-amber-300">
                   <TriangleAlert className="mt-px size-3.5 shrink-0" aria-hidden />
-                  {toast.warning}
+                  マイページ専用として登録（理由：{toast.reason}）
                 </p>
               )}
+              <p className="mt-1 text-sm text-ink-2">{toast.detail}</p>
             </div>
             <button
               type="button"

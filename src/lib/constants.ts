@@ -1,10 +1,21 @@
-/** Constants shared by server and client (no heavy dependencies like zod). */
+/** Constants shared across the app (no heavy dependencies like zod). */
 
 export const MIN_AGE = 18;
 export const MIN_PASSWORD_LENGTH = 8;
-/** Durations under this many seconds are excluded from rankings (anti-cheat). */
-export const MIN_RANKABLE_SECONDS = 10;
-/** Longest duration accepted for one entry (24 hours). */
-export const MAX_DURATION_SECONDS = 24 * 60 * 60;
+
+// ---- Ranking eligibility (isRanked) -------------------------------------------
+/** Entries longer than this (120 min) are treated as a forgotten stopwatch: My Page only. */
+export const RANKING_MAX_DURATION_SECONDS = 2 * 60 * 60;
+/** An entry finished within this time (30 min) after the previous one is in cooldown: My Page only. */
+export const RANKING_COOLDOWN_SECONDS = 30 * 60;
+/** At most this many ranked entries per calendar day (0:00-23:59). */
+export const RANKING_DAILY_LIMIT = 5;
+
+// ---- Tamper detection --------------------------------------------------------
+/** Allowed gap (s) between measured time + paused time and the real elapsed time. */
+export const TAMPER_TOLERANCE_SECONDS = 3;
+
+/** Longest measurement accepted at all (7 days; anything longer is clearly broken data). */
+export const MAX_DURATION_SECONDS = 7 * 24 * 60 * 60;
 /** How far back a completion time may be (allows saving after reopening the record screen). */
 export const MAX_COMPLETED_AT_AGE_MS = 7 * 24 * 60 * 60 * 1000;

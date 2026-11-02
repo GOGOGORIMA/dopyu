@@ -3,6 +3,7 @@
 import { History, LoaderCircle, Trash2, TriangleAlert } from "lucide-react";
 import { useMemo, useState } from "react";
 import { deleteEntry, type LocalEntry } from "@/lib/local-db";
+import { EXCLUSION_LABEL } from "@/lib/ranking-rules";
 import { formatDurationJa, formatMl } from "@/lib/time";
 
 type MyEntry = LocalEntry;
@@ -65,10 +66,10 @@ export function RecentEntries({ entries }: { entries: LocalEntry[] }) {
                   </span>
                 </div>
                 <div className="mt-1 flex flex-wrap gap-1">
-                  {!entry.isRankable && (
+                  {!entry.isRanked && (
                     <span className="inline-flex items-center gap-1 rounded-full bg-amber-400/10 px-2 py-0.5 text-[11px] text-amber-200">
                       <TriangleAlert className="size-3" aria-hidden />
-                      ランキング対象外
+                      マイページのみ{entry.rankExclusion ? `（${EXCLUSION_LABEL[entry.rankExclusion]}）` : ""}
                     </span>
                   )}
                   {entry.tags.map((tag) => (

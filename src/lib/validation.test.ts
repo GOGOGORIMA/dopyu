@@ -3,8 +3,6 @@ import { describe, it } from "node:test";
 import { normalizeTagList, normalizeTagName } from "./tags";
 import { createEntrySchema, registerSchema, toFieldErrors } from "./validation";
 
-const nowIso = () => new Date().toISOString();
-
 describe("tag normalization", () => {
   it("NFKC, trims and collapses whitespace", () => {
     assert.equal(normalizeTagName("  ＡＳＭＲ　 動画 "), "ASMR 動画");
@@ -17,28 +15,55 @@ describe("tag normalization", () => {
 });
 
 describe("createEntrySchema", () => {
-  it("accepts a valid entry", () => {
-    const result = createEntrySchema.safeParse({
-      completedAt: nowIso(),
-      durationSeconds: 600,
-      tags: ["動画", "動画", "ＶＲ"],
-    });
+  /** Builds an input whose timestamps are consistent: finished now, measured + paused = elapsed. */
+  const entry = (durationSeconds: number, pausedSeconds = 0, extra: Record<string, unknown> = {}) => {
+    const end = Date.now();
+    return {
+      startTime: new Date(end - (durationSeconds + pausedSeconds) * 1000).toISOString(),
+      completedAt: new Date(end).toISOString(),
+      durationSeconds,
+      pausedSeconds,
+      tags: ["動画"],
+      ...extra,
+    };
+  };
+
+  it("accepts a valid entry (with pauses) and normalizes tags", () => {
+    const result = createEntrySchema.safeParse(entry(600, 120, { tags: ["動画", "動画", "ＶＲ"] }));
     assert.ok(result.success);
     assert.deepEqual(result.data.tags, ["動画", "VR"]);
   });
 
-  it("accepts entries under 10 seconds (they are only excluded from rankings)", () => {
-    assert.ok(createEntrySchema.safeParse({ completedAt: nowIso(), durationSeconds: 3 }).success);
+  it("has no minimum duration", () => {
+    assert.ok(createEntrySchema.safeParse(entry(3)).success);
   });
 
-  it("rejects future times, times older than 7 days, durations over 24h, and more than 10 tags", () => {
-    const future = new Date(Date.now() + 60 * 60 * 1000).toISOString();
-    const old = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString();
-    assert.equal(createEntrySchema.safeParse({ completedAt: future, durationSeconds: 60 }).success, false);
-    assert.equal(createEntrySchema.safeParse({ completedAt: old, durationSeconds: 60 }).success, false);
-    assert.equal(createEntrySchema.safeParse({ completedAt: nowIso(), durationSeconds: 90000 }).success, false);
-    const tooMany = Array.from({ length: 11 }, (_, i) => `tag${i}`);
-    assert.equal(createEntrySchema.safeParse({ completedAt: nowIso(), durationSeconds: 60, tags: tooMany }).success, false);
+  it("requires at least one tag", () => {
+    assert.equal(createEntrySchema.safeParse(entry(600, 0, { tags: [] })).success, false);
+    assert.equal(createEntrySchema.safeParse(entry(600, 0, { tags: ["   "] })).success, false);
+  });
+
+  it("rejects tampered measurements (displayed time does not match the real elapsed time)", () => {
+    // Real elapsed 60 s but the stopwatch claims 3600 s
+    const tampered = { ...entry(60), durationSeconds: 3600 };
+    assert.equal(createEntrySchema.safeParse(tampered).success, false);
+    // Paused time that does not add up
+    const wrongPause = { ...entry(600, 300), pausedSeconds: 0 };
+    assert.equal(createEntrySchema.safeParse(wrongPause).success, false);
+    // A small clock rounding gap is fine
+    assert.ok(createEntrySchema.safeParse({ ...entry(600), durationSeconds: 601 }).success);
+  });
+
+  it("rejects future times and times older than 7 days", () => {
+    const future = { ...entry(60), completedAt: new Date(Date.now() + 60 * 60 * 1000).toISOString() };
+    assert.equal(createEntrySchema.safeParse(future).success, false);
+    const oldEnd = Date.now() - 8 * 24 * 60 * 60 * 1000;
+    const old = {
+      ...entry(60),
+      startTime: new Date(oldEnd - 60_000).toISOString(),
+      completedAt: new Date(oldEnd).toISOString(),
+    };
+    assert.equal(createEntrySchema.safeParse(old).success, false);
   });
 });
 

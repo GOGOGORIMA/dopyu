@@ -4,12 +4,11 @@ import {
   MAX_DURATION_SECONDS,
   MIN_AGE,
   MIN_PASSWORD_LENGTH,
+  TAMPER_TOLERANCE_SECONDS,
 } from "./constants";
 import { isCountryCode } from "./countries";
 import { MAX_TAGS_PER_ENTRY, normalizeTagList } from "./tags";
 import { calculateAge } from "./volume";
-
-export { MIN_RANKABLE_SECONDS } from "./constants";
 
 /** Tolerance for client clocks running ahead. */
 const FUTURE_TOLERANCE_MS = 5 * 60 * 1000;
@@ -79,33 +78,64 @@ export const loginSchema = z.object({
   }),
 }, BODY_ERROR);
 
-export const createEntrySchema = z.object({
-  completedAt: z
-    .string({ error: "完了日時が必要です" })
-    .pipe(z.iso.datetime({ offset: true, error: "完了日時の形式が正しくありません" }))
-    .transform((value) => new Date(value))
-    .refine((date) => date.getTime() <= Date.now() + FUTURE_TOLERANCE_MS, {
-      error: "完了日時が未来になっています",
-    })
-    .refine((date) => date.getTime() >= Date.now() - MAX_COMPLETED_AT_AGE_MS, {
-      error: "7日以上前の記録は登録できません",
-    }),
-  durationSeconds: z
-    .number({ error: "計測時間が必要です" })
-    .int({ error: "計測時間が正しくありません" })
-    .min(0, { error: "計測時間が正しくありません" })
-    .max(MAX_DURATION_SECONDS, {
-      error: "計測時間が24時間を超えています。リセットしてやり直してください",
-    }),
-  tags: z
-    .array(z.string().max(200), { error: "タグの形式が正しくありません" })
-    .max(50)
-    .default([])
-    .transform(normalizeTagList)
-    .refine((tags) => tags.length <= MAX_TAGS_PER_ENTRY, {
-      error: `タグは1回の記録につき${MAX_TAGS_PER_ENTRY}個までです`,
-    }),
-}, BODY_ERROR);
+const isoDate = (label: string) =>
+  z
+    .string({ error: `${label}が必要です` })
+    .pipe(z.iso.datetime({ offset: true, error: `${label}の形式が正しくありません` }))
+    .transform((value) => new Date(value));
+
+export const createEntrySchema = z
+  .object(
+    {
+      /** When the stopwatch was first started (startTime) */
+      startTime: isoDate("開始時刻"),
+      /** When "finish" was pressed (endTime) */
+      completedAt: isoDate("完了日時")
+        .refine((date) => date.getTime() <= Date.now() + FUTURE_TOLERANCE_MS, {
+          error: "完了日時が未来になっています",
+        })
+        .refine((date) => date.getTime() >= Date.now() - MAX_COMPLETED_AT_AGE_MS, {
+          error: "7日以上前の記録は登録できません",
+        }),
+      /** Seconds shown on the stopwatch (paused time excluded) */
+      durationSeconds: z
+        .number({ error: "計測時間が必要です" })
+        .int({ error: "計測時間が正しくありません" })
+        .min(0, { error: "計測時間が正しくありません" })
+        .max(MAX_DURATION_SECONDS, { error: "計測時間が長すぎます。リセットしてやり直してください" }),
+      /** Total time spent paused */
+      pausedSeconds: z
+        .number({ error: "一時停止時間が必要です" })
+        .int({ error: "一時停止時間が正しくありません" })
+        .min(0, { error: "一時停止時間が正しくありません" }),
+      tags: z
+        .array(z.string().max(200), { error: "タグの形式が正しくありません" })
+        .max(50)
+        .default([])
+        .transform(normalizeTagList)
+        .refine((tags) => tags.length >= 1, { error: "オカズタグを1つ以上選択または入力してください" })
+        .refine((tags) => tags.length <= MAX_TAGS_PER_ENTRY, {
+          error: `タグは1回の記録につき${MAX_TAGS_PER_ENTRY}個までです`,
+        }),
+    },
+    BODY_ERROR,
+  )
+  // Tamper check: the displayed time must match the real wall-clock time between start and finish.
+  // real elapsed = measured + paused (within a small tolerance); measured can never exceed real elapsed.
+  .superRefine((input, ctx) => {
+    const elapsed = (input.completedAt.getTime() - input.startTime.getTime()) / 1000;
+    const tampered =
+      elapsed < 0 ||
+      input.durationSeconds > elapsed + TAMPER_TOLERANCE_SECONDS ||
+      Math.abs(elapsed - (input.durationSeconds + input.pausedSeconds)) > TAMPER_TOLERANCE_SECONDS;
+    if (tampered) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["durationSeconds"],
+        message: "計測データに不整合があるため保存できません（不正なデータの可能性があります）。リセットしてやり直してください",
+      });
+    }
+  });
 
 export type CreateEntryInput = z.infer<typeof createEntrySchema>;
 

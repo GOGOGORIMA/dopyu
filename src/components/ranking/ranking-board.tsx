@@ -3,7 +3,6 @@
 import { ArrowDownWideNarrow, CalendarDays, Earth, Info, Lock, Trophy, type LucideIcon } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
-import { MIN_RANKABLE_SECONDS } from "@/lib/constants";
 import { getCurrentUser, useDb } from "@/lib/local-db";
 import { computeCountryRanking, computeUserRanking } from "@/lib/ranking";
 import type { RankingType, WorldCupSort } from "@/lib/validation";
@@ -100,7 +99,7 @@ export function RankingBoard() {
           <p className="flex items-start gap-1.5 text-xs leading-relaxed text-muted">
             <Lock className="mt-px size-3.5 shrink-0" aria-hidden />
             ランキングに表示されるのはユーザーネーム・所属国・回数・推定総量のみです。タグや記録時刻は表示されません。
-            計測時間{MIN_RANKABLE_SECONDS}秒未満の記録は集計対象外です。デモ版のため、ランキングは組み込みのサンプルユーザーとこのブラウザ内のアカウントで構成されます。
+            集計対象は、計測120分以内・前回の記録から30分経過後・1日5回までの記録です。デモ版のため、ランキングは組み込みのサンプルユーザーとこのブラウザ内のアカウントで構成されます。
           </p>
         </>
       )}

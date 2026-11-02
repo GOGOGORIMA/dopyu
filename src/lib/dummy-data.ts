@@ -2,6 +2,7 @@ import { getDaysInMonth, getZonedParts, zonedTimeToUtc } from "./time";
 import { estimateVolumeMl } from "./volume";
 import { APP_TIME_ZONE } from "./time";
 import type { LocalEntry } from "./local-db";
+import { assignRankingInOrder } from "./ranking-rules";
 
 /**
  * Built-in dummy users for the ranking (replaces the former Prisma seed).
@@ -140,7 +141,7 @@ export type RankingSource = {
 
 const aggregateCache = new Map<string, RankingSource[]>();
 
-/** Ranked (>= 10 s) count and total volume of every dummy user within [start, end). */
+/** Ranked count and total volume of every dummy user within [start, end) (same isRanked rules as real users). */
 export function getDummyAggregates(start: Date, end: Date, now: Date): RankingSource[] {
   // Cache per hour: generated data only grows as time passes
   const cacheKey = `${start.toISOString()}|${Math.floor(now.getTime() / 3_600_000)}`;
@@ -156,9 +157,9 @@ export function getDummyAggregates(start: Date, end: Date, now: Date): RankingSo
       // Start one month early so time-zone edges around Jan 1 are covered
       const fromYear = startParts.month === 1 ? startParts.year - 1 : startParts.year;
       const fromMonth = startParts.month === 1 ? 12 : startParts.month - 1;
-      for (const s of generateSessions(user, now, fromYear, fromMonth)) {
+      for (const s of assignRankingInOrder(generateSessions(user, now, fromYear, fromMonth))) {
         const t = s.completedAt.getTime();
-        if (t < start.getTime() || t >= end.getTime() || s.durationSeconds < 10) continue;
+        if (t < start.getTime() || t >= end.getTime() || !s.isRanked) continue;
         count += 1;
         totalVolumeMl += estimateVolumeMl(birth, s.completedAt, APP_TIME_ZONE);
       }
@@ -181,12 +182,15 @@ export function generateDemoEntries(birthDate: Date, now: Date = new Date()): Lo
     favoriteTags: ["動画", "妄想", "ASMR", "漫画", "グラビア", "VR"],
   };
   const year = getZonedParts(now, APP_TIME_ZONE).year;
-  return generateSessions(demo, now, year, 1).map((s, i) => ({
+  return assignRankingInOrder(generateSessions(demo, now, year, 1)).map((s, i) => ({
     id: `demo-${i}-${s.completedAt.getTime()}`,
+    startTime: new Date(s.completedAt.getTime() - s.durationSeconds * 1000).toISOString(),
     completedAt: s.completedAt.toISOString(),
     durationSeconds: s.durationSeconds,
     volumeMl: estimateVolumeMl(birthDate, s.completedAt, APP_TIME_ZONE),
-    isRankable: s.durationSeconds >= 10,
-    tags: s.tags,
+    isRanked: s.isRanked,
+    rankExclusion: s.reason,
+    // The demo account should satisfy the "at least one tag" rule too
+    tags: s.tags.length > 0 ? s.tags : [demo.favoriteTags[i % demo.favoriteTags.length]],
   }));
 }

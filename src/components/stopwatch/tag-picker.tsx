@@ -55,6 +55,7 @@ export function TagPicker({
         <label htmlFor={inputId} className="flex items-center gap-1.5 text-sm font-semibold">
           <Tag className="size-4 text-violet" aria-hidden />
           オカズタグ
+          <span className="rounded-full bg-pink/15 px-1.5 py-0.5 text-[10px] font-bold text-pink">必須</span>
         </label>
         <span className="text-xs text-muted tabular-nums">
           {selected.length}/{MAX_TAGS_PER_ENTRY}

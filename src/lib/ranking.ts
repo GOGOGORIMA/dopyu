@@ -73,7 +73,7 @@ function collectSources(viewer: LocalUser | null, start: Date, end: Date, now: D
     let totalVolumeMl = 0;
     for (const e of listEntries(user.id)) {
       const t = new Date(e.completedAt).getTime();
-      if (!e.isRankable || t < start.getTime() || t >= end.getTime()) continue;
+      if (!e.isRanked || t < start.getTime() || t >= end.getTime()) continue;
       count += 1;
       totalVolumeMl += e.volumeMl;
     }

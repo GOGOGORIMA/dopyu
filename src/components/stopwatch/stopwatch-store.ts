@@ -14,20 +14,30 @@ export type StopwatchStatus = "idle" | "running" | "paused" | "finished";
 
 export type StopwatchState = {
   status: StopwatchStatus;
+  /** When the measurement was first started (startTime, epoch ms) */
+  startedAt: number | null;
   /** Start of the current run (epoch ms). Set only while running */
   runningSince: number | null;
-  /** Total time of completed runs (ms) */
+  /** Total time of completed runs (ms) = the time shown on screen */
   accumulatedMs: number;
-  /** When "finish" was pressed (epoch ms). Set only while finished */
+  /** When the current pause began (epoch ms). Set only while paused */
+  pausedAt: number | null;
+  /** Total time spent paused so far (ms) */
+  pausedMs: number;
+  /** When "finish" was pressed (endTime, epoch ms). Set only while finished */
   finishedAt: number | null;
 };
 
-const STORAGE_KEY = "dopyu:stopwatch:v1";
+// v2 adds startedAt / pausedMs for the tamper check (v1 data is simply ignored)
+const STORAGE_KEY = "dopyu:stopwatch:v2";
 
 export const IDLE_STATE: StopwatchState = {
   status: "idle",
+  startedAt: null,
   runningSince: null,
   accumulatedMs: 0,
+  pausedAt: null,
+  pausedMs: 0,
   finishedAt: null,
 };
 
@@ -41,6 +51,10 @@ function isValidState(value: unknown): value is StopwatchState {
   return (
     (v.status === "idle" || v.status === "running" || v.status === "paused" || v.status === "finished") &&
     isNum(v.accumulatedMs) &&
+    isNum(v.pausedMs) &&
+    (v.startedAt === null || isNum(v.startedAt)) &&
+    (v.pausedAt === null || isNum(v.pausedAt)) &&
+    (v.status === "idle" || isNum(v.startedAt)) &&
     (v.runningSince === null || isNum(v.runningSince)) &&
     (v.finishedAt === null || isNum(v.finishedAt)) &&
     (v.status !== "running" || isNum(v.runningSince)) &&
@@ -123,37 +137,37 @@ export const stopwatch = {
   start(now = Date.now()) {
     const state = getSnapshot();
     if (state.status === "idle") {
-      write({ status: "running", runningSince: now, accumulatedMs: 0, finishedAt: null });
+      write({ ...IDLE_STATE, status: "running", startedAt: now, runningSince: now });
     } else if (state.status === "paused") {
-      write({ ...state, status: "running", runningSince: now });
+      const pausedFor = state.pausedAt !== null ? Math.max(0, now - state.pausedAt) : 0;
+      write({ ...state, status: "running", runningSince: now, pausedAt: null, pausedMs: state.pausedMs + pausedFor });
     }
   },
   pause(now = Date.now()) {
     const state = getSnapshot();
     if (state.status !== "running") return;
-    write({
-      status: "paused",
-      runningSince: null,
-      accumulatedMs: getElapsedMs(state, now),
-      finishedAt: null,
-    });
+    write({ ...state, status: "paused", runningSince: null, accumulatedMs: getElapsedMs(state, now), pausedAt: now });
   },
   /** Stops the measurement and enters the "recording" state. */
   finish(now = Date.now()) {
     const state = getSnapshot();
     if (state.status !== "running" && state.status !== "paused") return;
+    const pausedFor = state.status === "paused" && state.pausedAt !== null ? Math.max(0, now - state.pausedAt) : 0;
     write({
+      ...state,
       status: "finished",
       runningSince: null,
       accumulatedMs: getElapsedMs(state, now),
+      pausedAt: null,
+      pausedMs: state.pausedMs + pausedFor,
       finishedAt: now,
     });
   },
-  /** Closing the record screen without saving returns to paused (resume, finish again, or reset). */
-  cancelFinish() {
+  /** Closing the record screen without saving returns to paused (the dialog time counts as paused time). */
+  cancelFinish(now = Date.now()) {
     const state = getSnapshot();
     if (state.status !== "finished") return;
-    write({ ...state, status: "paused", finishedAt: null });
+    write({ ...state, status: "paused", pausedAt: state.finishedAt ?? now, finishedAt: null });
   },
   reset() {
     write(IDLE_STATE);

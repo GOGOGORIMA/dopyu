@@ -1,9 +1,9 @@
 "use client";
 
-import { CalendarDays, Hourglass, LoaderCircle, Lock, TriangleAlert, X } from "lucide-react";
+import { CalendarDays, Hourglass, LoaderCircle, Lock, Trophy, TriangleAlert, X } from "lucide-react";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
-import { MIN_RANKABLE_SECONDS } from "@/lib/constants";
-import { createEntry, getCurrentUser, listMyTags, useDb } from "@/lib/local-db";
+import { createEntry, getCurrentUser, listEntries, listMyTags, useDb } from "@/lib/local-db";
+import { EXCLUSION_LABEL, judgeRanking } from "@/lib/ranking-rules";
 import { normalizeTagName } from "@/lib/tags";
 import { formatDurationJa } from "@/lib/time";
 import { TagPicker, type TagSuggestion } from "./tag-picker";
@@ -21,13 +21,19 @@ const dateTimeFormat = new Intl.DateTimeFormat("ja-JP", {
 
 /** Record screen opened after "finish". Completion time and measured duration are filled in automatically. */
 export function RecordDialog({
+  startedAt,
   completedAt,
   durationSeconds,
+  pausedSeconds,
   onCancel,
   onSaved,
 }: {
+  /** startTime (epoch ms) */
+  startedAt: number;
+  /** endTime (epoch ms) */
   completedAt: number;
   durationSeconds: number;
+  pausedSeconds: number;
   onCancel: () => void;
   onSaved: (result: SavedEntryResult) => void;
 }) {
@@ -37,7 +43,6 @@ export function RecordDialog({
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const tooShort = durationSeconds < MIN_RANKABLE_SECONDS;
 
   // The native <dialog> traps focus and handles Escape for us
   useEffect(() => {
@@ -52,6 +57,16 @@ export function RecordDialog({
     return user ? listMyTags(user.id) : [];
   });
 
+  // Preview of how this entry will be judged (the same rules run again when saving)
+  const decision = useDb(() => {
+    const user = getCurrentUser();
+    return judgeRanking(user ? listEntries(user.id) : [], new Date(completedAt), durationSeconds);
+  }, `${completedAt}:${durationSeconds}`);
+
+  // At least one tag is required (bot / mis-tap guard); text typed but not yet added also counts
+  const pendingTag = normalizeTagName(draft);
+  const hasTag = selected.length > 0 || pendingTag !== null;
+
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
     if (saving) return;
@@ -59,13 +74,14 @@ export function RecordDialog({
     setError(null);
 
     // Also include text that was typed but not added with Enter
-    const pending = normalizeTagName(draft);
-    const tags = pending && !selected.includes(pending) ? [...selected, pending] : selected;
+    const tags = pendingTag && !selected.includes(pendingTag) ? [...selected, pendingTag] : selected;
 
     try {
       const result = createEntry({
+        startTime: new Date(startedAt).toISOString(),
         completedAt: new Date(completedAt).toISOString(),
         durationSeconds,
+        pausedSeconds,
         tags,
       });
       onSaved(result);
@@ -122,19 +138,24 @@ export function RecordDialog({
             </div>
           </dl>
 
-          {tooShort && (
-            <div
-              role="alert"
-              className="flex gap-2.5 rounded-2xl border border-amber-400/30 bg-amber-400/10 p-3.5 text-sm text-amber-200"
-            >
-              <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
-              <p>
-                計測時間が{MIN_RANKABLE_SECONDS}秒未満です。不正防止のため、この記録は
-                <strong className="font-semibold">ランキング集計の対象外</strong>
-                になります（マイページには記録されます）。
-              </p>
-            </div>
-          )}
+          {decision &&
+            (decision.isRanked ? (
+              <div className="flex gap-2.5 rounded-2xl border border-accent/30 bg-accent/10 p-3.5 text-sm text-ink">
+                <Trophy className="mt-0.5 size-4 shrink-0 text-accent" aria-hidden />
+                <p>この記録は<strong className="font-semibold">ランキング集計の対象</strong>として保存されます。</p>
+              </div>
+            ) : (
+              <div
+                role="alert"
+                className="flex gap-2.5 rounded-2xl border border-amber-400/30 bg-amber-400/10 p-3.5 text-sm text-amber-200"
+              >
+                <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
+                <p>
+                  {decision.reason && <strong className="font-semibold">{EXCLUSION_LABEL[decision.reason]}のため、</strong>}
+                  この記録は<strong className="font-semibold">マイページにのみ</strong>保存されます（ランキング集計の対象外）。
+                </p>
+              </div>
+            ))}
 
           <TagPicker
             suggestions={suggestions}
@@ -167,11 +188,12 @@ export function RecordDialog({
           </button>
           <button
             type="submit"
-            disabled={saving}
-            className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-accent text-sm font-bold text-accent-ink transition hover:brightness-110 disabled:opacity-60"
+            disabled={saving || !hasTag}
+            title={hasTag ? undefined : "オカズタグを1つ以上選択または入力してください"}
+            className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-accent text-sm font-bold text-accent-ink transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {saving && <LoaderCircle className="size-4 animate-spin" aria-hidden />}
-            {saving ? "保存中…" : "この内容で記録する"}
+            {saving ? "保存中…" : hasTag ? "記録を保存" : "タグを1つ以上選んでください"}
           </button>
         </div>
       </form>

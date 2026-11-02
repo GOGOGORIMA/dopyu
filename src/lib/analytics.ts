@@ -38,7 +38,7 @@ export function computeStats(entries: LocalEntry[], timeZone: string, now: Date 
     const parts = getZonedParts(new Date(e.completedAt), timeZone);
     hourly[parts.hour].count += 1;
     days.add(`${parts.month}-${parts.day}`);
-    if (e.isRankable) rankableCount += 1;
+    if (e.isRanked) rankableCount += 1;
     totalVolume += e.volumeMl;
     totalDuration += e.durationSeconds;
     longest = Math.max(longest, e.durationSeconds);
