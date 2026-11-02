@@ -142,7 +142,8 @@ export type CreateEntryInput = z.infer<typeof createEntrySchema>;
 export const RANKING_TYPES = ["japan", "world", "worldcup"] as const;
 export type RankingType = (typeof RANKING_TYPES)[number];
 
-export const WORLD_CUP_SORTS = ["average", "volume"] as const;
+/** World Cup sort: "volume" = total estimated volume (default), "average" = average volume per member */
+export const WORLD_CUP_SORTS = ["volume", "average"] as const;
 export type WorldCupSort = (typeof WORLD_CUP_SORTS)[number];
 
 export function parseRankingType(value: unknown): RankingType {
@@ -150,7 +151,7 @@ export function parseRankingType(value: unknown): RankingType {
 }
 
 export function parseWorldCupSort(value: unknown): WorldCupSort {
-  return WORLD_CUP_SORTS.includes(value as WorldCupSort) ? (value as WorldCupSort) : "average";
+  return WORLD_CUP_SORTS.includes(value as WorldCupSort) ? (value as WorldCupSort) : "volume";
 }
 
 /** Parses "YYYY-MM". Returns null when invalid. */

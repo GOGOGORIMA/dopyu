@@ -1,4 +1,5 @@
 import { Crown, Medal, Sparkles } from "lucide-react";
+import { Avatar } from "@/components/avatar";
 import { Flag } from "@/components/flag";
 import { cn } from "@/lib/cn";
 import type { UserRanking, UserRankingRow } from "@/lib/ranking";
@@ -36,9 +37,10 @@ function PodiumCard({ row }: { row: UserRankingRow }) {
     >
       <Icon className={cn("size-6", style.text)} aria-hidden />
       <span className={cn("mt-1 text-xs font-bold", style.text)}>{row.rank}位</span>
-      <Flag code={row.countryCode} name={row.countryName} className="mt-3 text-xl" />
-      <span className="mt-2 w-full truncate text-sm font-semibold" title={row.username}>
-        {row.username}
+      <Avatar avatar={row.avatar} name={row.username} className="mt-3 size-12" />
+      <span className="mt-2 flex w-full min-w-0 items-center justify-center gap-1.5 text-sm font-semibold">
+        <Flag code={row.countryCode} name={row.countryName} />
+        <span className="truncate" title={row.username}>{row.username}</span>
       </span>
       {row.isMe && <MeChip />}
       <span className="mt-2 text-xl font-bold">
@@ -58,6 +60,7 @@ function RankingRow({ row }: { row: UserRankingRow }) {
       </td>
       <td className="max-w-0 py-3 pr-2">
         <div className="flex min-w-0 items-center gap-2 sm:gap-2.5">
+          <Avatar avatar={row.avatar} name={row.username} className="size-8" />
           <Flag code={row.countryCode} name={row.countryName} />
           <span className="truncate font-medium" title={row.username}>
             {row.username}

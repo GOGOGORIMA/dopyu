@@ -24,7 +24,7 @@ export function CountryRankingView({ ranking }: { ranking: CountryRanking }) {
     <div className="overflow-hidden rounded-3xl border border-line bg-surface">
       <table className="w-full table-fixed text-sm">
         <caption className="sr-only">
-          国別ワールドカップ（{sortedByAverage ? "1人あたり平均回数" : "国全体の推定総量"}順）
+          国別ワールドカップ（{sortedByAverage ? "1人あたり平均推定量" : "国全体の推定総量"}順）
         </caption>
         <thead>
           <tr className="text-left text-xs text-muted">
@@ -37,7 +37,7 @@ export function CountryRankingView({ ranking }: { ranking: CountryRanking }) {
               aria-sort={sortedByAverage ? "descending" : undefined}
               className={cn("w-[4.5rem] py-2.5 pr-2 text-right font-medium sm:w-24 sm:pr-3", sortedByAverage && activeHead)}
             >
-              平均回数
+              平均
             </th>
             <th
               scope="col"
@@ -88,8 +88,8 @@ export function CountryRankingView({ ranking }: { ranking: CountryRanking }) {
                 <span className="ml-0.5 text-xs text-muted">回</span>
               </td>
               <td className={cn("py-3 pr-2 text-right text-[13px] whitespace-nowrap text-ink-2 tabular-nums sm:pr-3 sm:text-sm", sortedByAverage && activeCell)}>
-                {row.averageCount.toFixed(1)}
-                <span className="ml-0.5 text-xs font-normal text-muted">回</span>
+                {row.averageVolumeMl.toFixed(1)}
+                <span className="ml-0.5 text-xs font-normal text-muted">ml</span>
               </td>
               <td className={cn("py-3 pr-3 text-right text-[13px] whitespace-nowrap text-ink-2 tabular-nums sm:pr-4 sm:text-sm", !sortedByAverage && activeCell)}>
                 {formatMl(row.totalVolumeMl)}

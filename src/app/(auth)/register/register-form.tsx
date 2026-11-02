@@ -4,6 +4,7 @@ import { Cake, Droplet, Globe, KeyRound, LoaderCircle, Mail, UserRound } from "l
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { AvatarPicker } from "@/components/avatar-picker";
 import { Field, inputClass } from "@/components/ui/field";
 import { MIN_AGE, MIN_PASSWORD_LENGTH } from "@/lib/constants";
 import type { CountryOption } from "@/lib/countries";
@@ -28,6 +29,7 @@ export function RegisterForm({ countries }: { countries: CountryOption[] }) {
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [preview, setPreview] = useState<Preview>(null);
+  const [avatar, setAvatar] = useState<string | null>(null);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -46,6 +48,7 @@ export function RegisterForm({ countries }: { countries: CountryOption[] }) {
         },
         // Built-in ranking users' names cannot be taken
         DUMMY_USERS.map((u) => u.username),
+        avatar,
       );
       router.replace("/");
     } catch (err) {
@@ -87,6 +90,13 @@ export function RegisterForm({ countries }: { countries: CountryOption[] }) {
       >
         <input id="username" name="username" type="text" autoComplete="username" required maxLength={20} aria-invalid={invalid("username")} className={inputClass} placeholder="dopyu_taro" />
       </Field>
+
+      <fieldset className="space-y-1.5">
+        <legend className="mb-1.5 text-sm font-medium text-ink-2">
+          アイコン <span className="text-xs font-normal text-muted">（任意・あとでマイページから変更できます）</span>
+        </legend>
+        <AvatarPicker value={avatar} onChange={setAvatar} name="あなた" />
+      </fieldset>
 
       <Field
         label="生年月日"

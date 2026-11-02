@@ -1,5 +1,6 @@
 "use client";
 
+import { Avatar } from "@/components/avatar";
 import { Flag } from "@/components/flag";
 import { getCountryName } from "@/lib/countries";
 import { useCurrentUser } from "@/lib/local-db";
@@ -12,7 +13,8 @@ export function UserMenu() {
 
   return (
     <div className="flex items-center gap-1.5">
-      <div className="flex min-w-0 items-center gap-2 rounded-full border border-line bg-surface px-3 py-1.5">
+      <div className="flex min-w-0 items-center gap-2 rounded-full border border-line bg-surface py-1 pr-3 pl-1">
+        <Avatar avatar={user.avatar} name={user.username} className="size-7" />
         <Flag code={user.countryCode} name={getCountryName(user.countryCode)} />
         <span className="max-w-[9rem] truncate text-sm font-medium">{user.username}</span>
       </div>

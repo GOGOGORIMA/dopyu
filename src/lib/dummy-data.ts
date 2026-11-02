@@ -132,8 +132,33 @@ function generateSessions(user: DummyUser, now: Date, fromYear: number, fromMont
   return result;
 }
 
+/** Preset icons for the built-in users (a couple have none, to show the default icon). */
+const DUMMY_AVATARS: Record<string, string | null> = {
+  sakura_77: "preset:cat",
+  kenji_45: "preset:dog",
+  yuki_n: "preset:unicorn",
+  hiroshi_s: "preset:panda",
+  ren_19: "preset:fire",
+  nanashi: null,
+  eagle_mike: "preset:alien",
+  j_smith: null,
+  luna_ray: "preset:ghost",
+  minjun_kr: "preset:fox",
+  seoul_king: "preset:octopus",
+  longwei: "preset:panda",
+  carioca_br: "preset:frog",
+  pedro_samba: "preset:fire",
+  hans_berlin: "preset:dog",
+  pierre_fr: "preset:cat",
+  london_lad: "preset:penguin",
+  raj_mumbai: "preset:droplet",
+  bangkok_boy: "preset:octopus",
+  aussie_dan: "preset:fox",
+};
+
 export type RankingSource = {
   username: string;
+  avatar: string | null;
   countryCode: string;
   count: number;
   totalVolumeMl: number;
@@ -164,7 +189,13 @@ export function getDummyAggregates(start: Date, end: Date, now: Date): RankingSo
         totalVolumeMl += estimateVolumeMl(birth, s.completedAt, APP_TIME_ZONE);
       }
     }
-    return { username: user.username, countryCode: user.countryCode, count, totalVolumeMl };
+    return {
+      username: user.username,
+      avatar: DUMMY_AVATARS[user.username] ?? null,
+      countryCode: user.countryCode,
+      count,
+      totalVolumeMl,
+    };
   });
   aggregateCache.set(cacheKey, result);
   return result;

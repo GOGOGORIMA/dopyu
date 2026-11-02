@@ -16,6 +16,8 @@ export type RankingPeriod = { year: number; timeZone: string; startDate: string;
 export type UserRankingRow = {
   rank: number;
   username: string;
+  /** Public icon ("preset:<id>" / data URL / null) */
+  avatar: string | null;
   countryCode: string;
   countryName: string;
   count: number;
@@ -41,6 +43,8 @@ export type CountryRankingRow = {
   totalVolumeMl: number;
   /** Total count / affiliated users (including users with no entries) */
   averageCount: number;
+  /** Average estimated volume per affiliated user (ml) = total volume / memberCount */
+  averageVolumeMl: number;
   isMyCountry: boolean;
 };
 
@@ -77,7 +81,14 @@ function collectSources(viewer: LocalUser | null, start: Date, end: Date, now: D
       count += 1;
       totalVolumeMl += e.volumeMl;
     }
-    return { username: user.username, countryCode: user.countryCode, count, totalVolumeMl, isMe: user.id === viewer?.id };
+    return {
+      username: user.username,
+      avatar: user.avatar ?? null,
+      countryCode: user.countryCode,
+      count,
+      totalVolumeMl,
+      isMe: user.id === viewer?.id,
+    };
   });
   return [...dummies, ...locals].map((s) => ({ ...s, totalVolumeMl: round1(s.totalVolumeMl) }));
 }
@@ -104,6 +115,7 @@ export function computeUserRanking(
   const rows: UserRankingRow[] = ranked.map((r) => ({
     rank: r.rank,
     username: r.username,
+    avatar: r.avatar,
     countryCode: r.countryCode,
     countryName: getCountryName(r.countryCode),
     count: r.count,
@@ -135,10 +147,12 @@ export function computeCountryRanking(sort: WorldCupSort, viewer: LocalUser | nu
     ...c,
     totalVolumeMl: round1(c.totalVolumeMl),
     averageCount: c.memberCount > 0 ? c.count / c.memberCount : 0,
+    averageVolumeMl: c.memberCount > 0 ? c.totalVolumeMl / c.memberCount : 0,
   }));
   type Row = (typeof rows)[number];
-  const primary = (r: Row) => (sort === "average" ? r.averageCount : r.totalVolumeMl);
-  const secondary = (r: Row) => (sort === "average" ? r.count : r.averageCount);
+  // "volume" (default): total estimated volume of the country. "average": average volume per member.
+  const primary = (r: Row) => (sort === "average" ? r.averageVolumeMl : r.totalVolumeMl);
+  const secondary = (r: Row) => (sort === "average" ? r.totalVolumeMl : r.averageVolumeMl);
   rows.sort((a, b) => primary(b) - primary(a) || secondary(b) - secondary(a) || a.countryCode.localeCompare(b.countryCode));
   const ranked = withRanks(rows, (a, b) => primary(a) === primary(b) && secondary(a) === secondary(b));
   return {
@@ -154,6 +168,7 @@ export function computeCountryRanking(sort: WorldCupSort, viewer: LocalUser | nu
       count: r.count,
       totalVolumeMl: r.totalVolumeMl,
       averageCount: round1(r.averageCount),
+      averageVolumeMl: round1(r.averageVolumeMl),
       isMyCountry: r.countryCode === viewer?.countryCode,
     })),
   };

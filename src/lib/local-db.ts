@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useSyncExternalStore } from "react";
+import { isValidAvatar } from "./avatar";
 import { getCountryName } from "./countries";
 import { normalizeTagList } from "./tags";
 import { createEntrySchema, loginSchema, registerSchema, toFieldErrors } from "./validation";
@@ -29,6 +30,8 @@ export type LocalUser = {
   birthDate: string;
   countryCode: string;
   createdAt: string;
+  /** "preset:<id>", a 128x128 data URL, or null (default icon). See src/lib/avatar.ts */
+  avatar?: string | null;
 };
 
 export type LocalEntry = {
@@ -162,7 +165,11 @@ export function toProfile(user: LocalUser, now: Date = new Date()): Profile {
   };
 }
 
-export async function registerUser(raw: Record<string, unknown>, reservedUsernames: string[] = []): Promise<LocalUser> {
+export async function registerUser(
+  raw: Record<string, unknown>,
+  reservedUsernames: string[] = [],
+  avatar: string | null = null,
+): Promise<LocalUser> {
   const parsed = registerSchema.safeParse(raw);
   if (!parsed.success) throw new FormError("入力内容を確認してください", toFieldErrors(parsed.error));
   const input = parsed.data;
@@ -184,6 +191,7 @@ export async function registerUser(raw: Record<string, unknown>, reservedUsernam
     birthDate: input.birthDate.toISOString().slice(0, 10),
     countryCode: input.countryCode,
     createdAt: new Date().toISOString(),
+    avatar: isValidAvatar(avatar) ? avatar : null,
   };
   writeJson(USERS_KEY, [...users, user]);
   writeJson(SESSION_KEY, user.id);
@@ -202,6 +210,18 @@ export async function loginUser(raw: Record<string, unknown>): Promise<LocalUser
   writeJson(SESSION_KEY, user.id);
   emit();
   return user;
+}
+
+/** Sets or clears (null) the logged-in user's icon. */
+export function updateAvatar(avatar: string | null) {
+  const current = getCurrentUser();
+  if (!current) throw new FormError("ログインが必要です");
+  if (avatar !== null && !isValidAvatar(avatar)) throw new FormError("アイコン画像の形式が正しくありません");
+  writeJson(
+    USERS_KEY,
+    listUsers().map((u) => (u.id === current.id ? { ...u, avatar } : u)),
+  );
+  emit();
 }
 
 export function logout() {
