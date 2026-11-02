@@ -1,10 +1,14 @@
+"use client";
+
 import { ExternalLink } from "lucide-react";
 import { AFFILIATES, type AffiliateSlot } from "@/config/affiliates";
 import { cn } from "@/lib/cn";
+import { useI18n } from "@/lib/i18n";
 
 /** Recommendation card for an affiliate slot, always marked "PR". */
 export function PromoCard({ slot, className }: { slot: AffiliateSlot; className?: string }) {
-  const ad = AFFILIATES[slot];
+  const { lang, t } = useI18n();
+  const ad = AFFILIATES[lang][slot];
   return (
     <a
       href={ad.url}
@@ -17,7 +21,7 @@ export function PromoCard({ slot, className }: { slot: AffiliateSlot; className?
     >
       <div className="flex items-center gap-2 text-[11px] text-muted">
         <span className="rounded border border-line-strong px-1.5 py-px font-bold tracking-wider text-ink-2">PR</span>
-        <span>おすすめ · {ad.eyebrow}</span>
+        <span>{t("おすすめ", "Sponsored")} · {ad.eyebrow}</span>
       </div>
       <p className="mt-1.5 text-sm font-semibold leading-snug text-ink">{ad.title}</p>
       <p className="mt-1 text-xs text-ink-2">{ad.description}</p>

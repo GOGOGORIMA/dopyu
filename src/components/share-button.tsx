@@ -1,11 +1,17 @@
+"use client";
+
+import { useI18n } from "@/lib/i18n";
+
 /** "Xで戦績をシェア" button that opens the X post intent in a new tab. */
 export function XShareButton({ href, className = "", compact = false }: { href: string; className?: string; compact?: boolean }) {
+  const { t } = useI18n();
+  const label = t("Xで戦績をシェア", "Share on X");
   return (
     <a
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      aria-label="Xで戦績をシェア"
+      aria-label={label}
       className={`inline-flex items-center justify-center gap-1.5 rounded-full bg-ink px-3 py-1.5 text-xs font-bold text-bg transition hover:brightness-90 ${className}`}
     >
       <svg viewBox="0 0 24 24" className="size-3.5" fill="currentColor" aria-hidden>
@@ -14,10 +20,10 @@ export function XShareButton({ href, className = "", compact = false }: { href: 
       {compact ? (
         <>
           {/* Icon only on phones (the accessible name stays on the link) */}
-          <span className="hidden sm:inline">Xで戦績をシェア</span>
+          <span className="hidden sm:inline">{label}</span>
         </>
       ) : (
-        "Xで戦績をシェア"
+        label
       )}
     </a>
   );

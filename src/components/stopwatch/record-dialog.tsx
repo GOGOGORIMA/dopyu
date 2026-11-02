@@ -3,21 +3,22 @@
 import { CalendarDays, Hourglass, LoaderCircle, Lock, Trophy, TriangleAlert, X } from "lucide-react";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { createEntry, getCurrentUser, listEntries, listMyTags, useDb } from "@/lib/local-db";
-import { EXCLUSION_LABEL, judgeRanking } from "@/lib/ranking-rules";
+import { useI18n } from "@/lib/i18n";
+import { EXCLUSION_LABELS, formatDuration, locale, translateMessage } from "@/lib/i18n-dict";
+import { judgeRanking } from "@/lib/ranking-rules";
 import { normalizeTagName } from "@/lib/tags";
-import { formatDurationJa } from "@/lib/time";
 import { TagPicker, type TagSuggestion } from "./tag-picker";
 
 export type SavedEntryResult = ReturnType<typeof createEntry>;
 
-const dateTimeFormat = new Intl.DateTimeFormat("ja-JP", {
+const dateTimeOptions: Intl.DateTimeFormatOptions = {
   year: "numeric",
   month: "2-digit",
   day: "2-digit",
   weekday: "short",
   hour: "2-digit",
   minute: "2-digit",
-});
+};
 
 /** Record screen opened after "finish". Completion time and measured duration are filled in automatically. */
 export function RecordDialog({
@@ -38,6 +39,7 @@ export function RecordDialog({
   onSaved: (result: SavedEntryResult) => void;
 }) {
   const titleId = useId();
+  const { lang, t } = useI18n();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [draft, setDraft] = useState("");
@@ -105,16 +107,16 @@ export function RecordDialog({
         <div className="flex items-start justify-between gap-4 border-b border-line px-5 pt-5 pb-4">
           <div>
             <h2 id={titleId} className="text-lg font-bold">
-              記録する
+              {t("記録する", "Save session")}
             </h2>
-            <p className="text-sm text-ink-2">お疲れさまでした。タグを付けて保存しましょう。</p>
+            <p className="text-sm text-ink-2">{t("お疲れさまでした。タグを付けて保存しましょう。", "Nice work. Add your sauce tags and save.")}</p>
           </div>
           <button
             type="button"
             onClick={onCancel}
             disabled={saving}
             className="-m-1 rounded-full p-2 text-muted transition hover:bg-surface-2 hover:text-ink"
-            aria-label="閉じる"
+            aria-label={t("閉じる", "Close")}
           >
             <X className="size-5" />
           </button>
@@ -125,16 +127,16 @@ export function RecordDialog({
             <div className="rounded-2xl border border-line bg-bg/60 p-3.5">
               <dt className="flex items-center gap-1.5 text-xs text-muted">
                 <CalendarDays className="size-3.5" aria-hidden />
-                完了日時
+                {t("完了日時", "Finished at")}
               </dt>
-              <dd className="mt-1 text-[15px] font-semibold">{dateTimeFormat.format(new Date(completedAt))}</dd>
+              <dd className="mt-1 text-[15px] font-semibold">{new Intl.DateTimeFormat(locale(lang), dateTimeOptions).format(new Date(completedAt))}</dd>
             </div>
             <div className="rounded-2xl border border-line bg-bg/60 p-3.5">
               <dt className="flex items-center gap-1.5 text-xs text-muted">
                 <Hourglass className="size-3.5" aria-hidden />
-                かかった時間
+                {t("かかった時間", "Duration")}
               </dt>
-              <dd className="mt-1 text-[15px] font-semibold">{formatDurationJa(durationSeconds)}</dd>
+              <dd className="mt-1 text-[15px] font-semibold">{formatDuration(durationSeconds, lang)}</dd>
             </div>
           </dl>
 
@@ -142,7 +144,7 @@ export function RecordDialog({
             (decision.isRanked ? (
               <div className="flex gap-2.5 rounded-2xl border border-accent/30 bg-accent/10 p-3.5 text-sm text-ink">
                 <Trophy className="mt-0.5 size-4 shrink-0 text-accent" aria-hidden />
-                <p>この記録は<strong className="font-semibold">ランキング集計の対象</strong>として保存されます。</p>
+                <p>{t("この記録はランキング集計の対象として保存されます。", "This session will count toward the rankings.")}</p>
               </div>
             ) : (
               <div
@@ -151,8 +153,12 @@ export function RecordDialog({
               >
                 <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
                 <p>
-                  {decision.reason && <strong className="font-semibold">{EXCLUSION_LABEL[decision.reason]}のため、</strong>}
-                  この記録は<strong className="font-semibold">マイページにのみ</strong>保存されます（ランキング集計の対象外）。
+                  {decision.reason && (
+                    <strong className="font-semibold">
+                      {t(`${EXCLUSION_LABELS.ja[decision.reason]}のため、`, `Because of the ${EXCLUSION_LABELS.en[decision.reason]}, `)}
+                    </strong>
+                  )}
+                  {t("この記録はマイページにのみ保存されます（ランキング集計の対象外）。", "this session is saved to My Page only (not ranked).")}
                 </p>
               </div>
             ))}
@@ -167,12 +173,12 @@ export function RecordDialog({
 
           <p className="flex items-center gap-1.5 text-xs text-muted">
             <Lock className="size-3.5 shrink-0" aria-hidden />
-            タグと完了時刻はあなただけに表示され、ランキングには公開されません。
+            {t("タグと完了時刻はあなただけに表示され、ランキングには公開されません。", "Your tags and times are private and never shown in rankings.")}
           </p>
 
           {error && (
             <p role="alert" className="rounded-xl bg-red-500/10 px-3.5 py-2.5 text-sm text-red-300">
-              {error}
+              {translateMessage(error, lang)}
             </p>
           )}
         </div>
@@ -184,16 +190,16 @@ export function RecordDialog({
             disabled={saving}
             className="h-12 rounded-xl border border-line px-5 text-sm font-semibold text-ink-2 transition hover:bg-surface-2"
           >
-            キャンセル
+            {t("キャンセル", "Cancel")}
           </button>
           <button
             type="submit"
             disabled={saving || !hasTag}
-            title={hasTag ? undefined : "オカズタグを1つ以上選択または入力してください"}
+            title={hasTag ? undefined : t("オカズタグを1つ以上選択または入力してください", "Pick or enter at least one sauce tag")}
             className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-accent text-sm font-bold text-accent-ink transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {saving && <LoaderCircle className="size-4 animate-spin" aria-hidden />}
-            {saving ? "保存中…" : hasTag ? "記録を保存" : "タグを1つ以上選んでください"}
+            {saving ? t("保存中…", "Saving…") : hasTag ? t("記録を保存", "Save") : t("タグを1つ以上選んでください", "Add at least one tag")}
           </button>
         </div>
       </form>

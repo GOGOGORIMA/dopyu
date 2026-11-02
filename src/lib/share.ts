@@ -5,8 +5,15 @@
  *   100 - < 500 ml 栄養ドリンク 約N本分          (120 ml)
  *   >= 500 ml      500mlペットボトル 約N本分
  */
-export function toFriendlyUnit(ml: number): string {
+export function toFriendlyUnit(ml: number, lang: "ja" | "en" = "ja"): string {
   const v = Math.max(0, ml);
+  if (lang === "en") {
+    // US-style units: tbsp (15 ml) / shot glass (44 ml) / energy drink can (250 ml) / pint glass (473 ml)
+    if (v < 15) return `approx. ${(v / 15).toFixed(1)} tbsp`;
+    if (v < 100) return `approx. ${(v / 44).toFixed(2)} Shot Glasses`;
+    if (v < 450) return `approx. ${(v / 250).toFixed(2)} Energy Drink Cans`;
+    return `approx. ${(v / 473).toFixed(2)} Pint Glasses`;
+  }
   if (v < 15) return `大さじ 約${(v / 15).toFixed(1)}杯分`;
   if (v < 100) return `乳酸菌飲料 約${(v / 65).toFixed(2)}本分`;
   if (v < 500) return `栄養ドリンク 約${(v / 120).toFixed(1)}本分`;
@@ -22,6 +29,7 @@ export function getSiteUrl(): string {
 }
 
 export const SHARE_HASHTAGS = "#DOPYU #射精ワールドカップ";
+export const SHARE_HASHTAGS_EN = "#DOPYU #NutWorldCup";
 
 /** X (Twitter) web intent URL for the given text (the site URL is appended automatically). */
 export function xShareUrl(text: string): string {
@@ -29,12 +37,24 @@ export function xShareUrl(text: string): string {
   return `https://twitter.com/intent/tweet?${params.toString()}`;
 }
 
-const formatMl = (ml: number) => ml.toLocaleString("ja-JP", { maximumFractionDigits: 1 });
+const formatMl = (ml: number) => ml.toLocaleString("en-US", { maximumFractionDigits: 1 });
 
-export function recordShareText(durationText: string, volumeMl: number, yearTotalMl: number): string {
+export function recordShareText(durationText: string, volumeMl: number, yearTotalMl: number, lang: "ja" | "en" = "ja"): string {
+  if (lang === "en") {
+    return `[DOPYU Recorded] Session: ${durationText} (Est. ${volumeMl.toFixed(1)}ml) | Yearly Total: ${formatMl(yearTotalMl)}ml (${toFriendlyUnit(yearTotalMl, "en")}) ${SHARE_HASHTAGS_EN}`;
+  }
   return `【DOPYU 記録完了】今回の記録：${durationText}（推定${formatMl(volumeMl)}ml） / 今年の累計：${formatMl(yearTotalMl)}ml（${toFriendlyUnit(yearTotalMl)}） ${SHARE_HASHTAGS}`;
 }
 
-export function rankShareText(periodLabel: string, scopeLabel: string, rank: number, totalVolumeMl: number): string {
+export function rankShareText(
+  periodLabel: string,
+  scopeLabel: string,
+  rank: number,
+  totalVolumeMl: number,
+  lang: "ja" | "en" = "ja",
+): string {
+  if (lang === "en") {
+    return `[DOPYU Championship] Current ${periodLabel} ${scopeLabel} Rank: #${rank}! Total Volume: ${formatMl(totalVolumeMl)}ml (${toFriendlyUnit(totalVolumeMl, "en")}) ${SHARE_HASHTAGS_EN}`;
+  }
   return `【DOPYU 射精競技】現在の${periodLabel}${scopeLabel}ランキング：第${rank}位！ 総量：${formatMl(totalVolumeMl)}ml（${toFriendlyUnit(totalVolumeMl)}） ${SHARE_HASHTAGS}`;
 }

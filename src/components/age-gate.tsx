@@ -2,6 +2,7 @@
 
 import { ShieldAlert } from "lucide-react";
 import { useEffect, useSyncExternalStore } from "react";
+import { LanguageToggle, useI18n } from "@/lib/i18n";
 import { PrivacyContent, TermsContent } from "./legal-content";
 
 const AGE_KEY = "dopyu_age_verified";
@@ -28,6 +29,7 @@ export function AgeGate() {
   // null on the server / during hydration, then true or false
   const verified = useSyncExternalStore(subscribe, readVerified, () => null);
   const open = verified === false;
+  const { t } = useI18n();
 
   useEffect(() => {
     const root = document.getElementById("app-root");
@@ -64,23 +66,29 @@ export function AgeGate() {
     >
       <div className="flex max-h-[90dvh] w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-line-strong bg-surface shadow-2xl">
         <div className="space-y-3 overflow-y-auto p-6">
-          <div className="flex items-center gap-2">
-            <ShieldAlert className="size-6 text-pink" aria-hidden />
-            <h2 id="age-gate-title" className="text-xl font-bold">
-              年齢確認（18歳以上対象）
-            </h2>
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <ShieldAlert className="size-6 text-pink" aria-hidden />
+              <h2 id="age-gate-title" className="text-xl font-bold">
+                {t("年齢確認（18歳以上対象）", "Age Verification (18+ only)")}
+              </h2>
+            </div>
+            <LanguageToggle />
           </div>
           <p className="text-sm leading-relaxed text-ink-2">
-            DOPYUは成人向けのヘルスケア・エンターテインメント記録アプリです。18歳未満の方（高校生を含む）はご利用いただけません。また、ご利用にあたっては利用規約および免責事項に同意したものとみなします。
+            {t(
+              "DOPYUは成人向けのヘルスケア・エンターテインメント記録アプリです。18歳未満の方（高校生を含む）はご利用いただけません。また、ご利用にあたっては利用規約および免責事項に同意したものとみなします。",
+              "DOPYU is an adult health & entertainment tracking app. You must be 18 or older (no high-school students). By using DOPYU you agree to the Terms of Service and Disclaimer.",
+            )}
           </p>
           <details className="rounded-2xl border border-line bg-bg/60 p-3">
-            <summary className="cursor-pointer text-sm font-semibold text-accent">利用規約・免責事項を読む</summary>
+            <summary className="cursor-pointer text-sm font-semibold text-accent">{t("利用規約・免責事項を読む", "Read the Terms & Disclaimer")}</summary>
             <div className="mt-3">
               <TermsContent />
             </div>
           </details>
           <details className="rounded-2xl border border-line bg-bg/60 p-3">
-            <summary className="cursor-pointer text-sm font-semibold text-accent">プライバシーポリシーを読む</summary>
+            <summary className="cursor-pointer text-sm font-semibold text-accent">{t("プライバシーポリシーを読む", "Read the Privacy Policy")}</summary>
             <div className="mt-3">
               <PrivacyContent />
             </div>
@@ -93,14 +101,14 @@ export function AgeGate() {
             autoFocus
             className="h-12 rounded-xl bg-accent text-sm font-bold text-accent-ink transition hover:brightness-110"
           >
-            18歳以上です（同意して入る）
+            {t("18歳以上です（同意して入る）", "I am 18 or older (Agree & Enter)")}
           </button>
           <button
             type="button"
             onClick={() => window.location.replace("https://www.google.com")}
             className="h-12 rounded-xl border border-line text-sm font-semibold text-ink-2 transition hover:bg-surface-2"
           >
-            18歳未満です（退出する）
+            {t("18歳未満です（退出する）", "I am under 18 (Leave)")}
           </button>
         </div>
       </div>

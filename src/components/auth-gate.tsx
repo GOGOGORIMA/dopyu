@@ -3,6 +3,7 @@
 import { LoaderCircle } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
+import { useI18n } from "@/lib/i18n";
 import { useCurrentUser } from "@/lib/local-db";
 
 /**
@@ -14,6 +15,7 @@ export function AuthGate({ mode, children }: { mode: "user" | "guest"; children:
   const user = useCurrentUser();
   const router = useRouter();
   const pathname = usePathname();
+  const { t } = useI18n();
   const allowed = user !== undefined && (mode === "user" ? user !== null : user === null);
 
   useEffect(() => {
@@ -28,7 +30,7 @@ export function AuthGate({ mode, children }: { mode: "user" | "guest"; children:
   if (!allowed) {
     return (
       <div className="flex flex-1 items-center justify-center py-24 text-muted" aria-busy="true">
-        <LoaderCircle className="size-6 animate-spin" aria-label="読み込み中" />
+        <LoaderCircle className="size-6 animate-spin" aria-label={t("読み込み中", "Loading")} />
       </div>
     );
   }

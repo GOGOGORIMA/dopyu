@@ -9,6 +9,8 @@ import { Field, inputClass } from "@/components/ui/field";
 import { MIN_AGE, MIN_PASSWORD_LENGTH } from "@/lib/constants";
 import type { CountryOption } from "@/lib/countries";
 import { DUMMY_USERS } from "@/lib/dummy-data";
+import { useI18n } from "@/lib/i18n";
+import { translateFieldErrors, translateMessage } from "@/lib/i18n-dict";
 import { FormError, registerUser } from "@/lib/local-db";
 import { calculateAge, estimateVolumeMlByAge } from "@/lib/volume";
 
@@ -23,7 +25,10 @@ function previewFromBirthDate(value: string): Preview {
   return { age, volumeMl: estimateVolumeMlByAge(age) };
 }
 
-export function RegisterForm({ countries }: { countries: CountryOption[] }) {
+export function RegisterForm({ countries }: { countries: Record<"ja" | "en", CountryOption[]> }) {
+  const { lang, t } = useI18n();
+  const [country, setCountry] = useState<string | null>(null);
+  const selectedCountry = country ?? (lang === "en" ? "US" : "JP");
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,35 +65,36 @@ export function RegisterForm({ countries }: { countries: CountryOption[] }) {
 
   // Client-side lock: block under-18 birth dates right away (the same rule runs again on submit)
   const underage = preview !== null && preview.age < MIN_AGE;
-  const birthDateError = underage ? "18歳未満の方はご登録いただけません" : fieldErrors.birthDate;
+  const shownErrors = translateFieldErrors(fieldErrors, lang);
+  const birthDateError = underage ? t("18歳未満の方はご登録いただけません", "You must be 18 or older to sign up") : shownErrors.birthDate;
   const invalid = (name: string) => (fieldErrors[name] || (name === "birthDate" && underage) ? true : undefined);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5" noValidate>
       <div>
-        <h1 className="text-xl font-bold">新規登録</h1>
-        <p className="mt-1 text-sm text-ink-2">{MIN_AGE}歳以上の方のみご利用いただけます。</p>
+        <h1 className="text-xl font-bold">{t("新規登録", "Sign up")}</h1>
+        <p className="mt-1 text-sm text-ink-2">{t(`${MIN_AGE}歳以上の方のみご利用いただけます。`, `For adults aged ${MIN_AGE}+ only.`)}</p>
       </div>
 
-      <Field label="メールアドレス（ログインID）" htmlFor="email" error={fieldErrors.email} icon={<Mail className="size-4" aria-hidden />}>
+      <Field label={t("メールアドレス（ログインID）", "Email (login ID)")} htmlFor="email" error={shownErrors.email} icon={<Mail className="size-4" aria-hidden />}>
         <input id="email" name="email" type="email" autoComplete="email" inputMode="email" required aria-invalid={invalid("email")} className={inputClass} placeholder="you@example.com" />
       </Field>
 
       <Field
-        label="パスワード"
+        label={t("パスワード", "Password")}
         htmlFor="password"
-        error={fieldErrors.password}
-        hint={`${MIN_PASSWORD_LENGTH}文字以上`}
+        error={shownErrors.password}
+        hint={t(`${MIN_PASSWORD_LENGTH}文字以上`, `At least ${MIN_PASSWORD_LENGTH} characters`)}
         icon={<KeyRound className="size-4" aria-hidden />}
       >
         <input id="password" name="password" type="password" autoComplete="new-password" required minLength={MIN_PASSWORD_LENGTH} aria-invalid={invalid("password")} className={inputClass} />
       </Field>
 
       <Field
-        label="ユーザーネーム（ランキングに表示）"
+        label={t("ユーザーネーム（ランキングに表示）", "Username (shown in rankings)")}
         htmlFor="username"
-        error={fieldErrors.username}
-        hint="2〜20文字。文字・数字・_ . - が使えます"
+        error={shownErrors.username}
+        hint={t("2〜20文字。文字・数字・_ . - が使えます", "2-20 characters: letters, numbers, _ . -")}
         icon={<UserRound className="size-4" aria-hidden />}
       >
         <input id="username" name="username" type="text" autoComplete="username" required maxLength={20} aria-invalid={invalid("username")} className={inputClass} placeholder="dopyu_taro" />
@@ -96,23 +102,27 @@ export function RegisterForm({ countries }: { countries: CountryOption[] }) {
 
       <fieldset className="space-y-1.5">
         <legend className="mb-1.5 text-sm font-medium text-ink-2">
-          アイコン <span className="text-xs font-normal text-muted">（任意・あとでマイページから変更できます）</span>
+          {t("アイコン", "Icon")}{" "}
+          <span className="text-xs font-normal text-muted">
+            {t("（任意・あとでマイページから変更できます）", "(optional, can be changed later on My Page)")}
+          </span>
         </legend>
-        <AvatarPicker value={avatar} onChange={setAvatar} name="あなた" />
+        <AvatarPicker value={avatar} onChange={setAvatar} name={t("あなた", "You")} />
       </fieldset>
 
       <Field
-        label="生年月日"
+        label={t("生年月日", "Date of birth")}
         htmlFor="birthDate"
         error={birthDateError}
         hint={
           preview ? (
             <span className="inline-flex items-center gap-1 text-ink-2">
               <Droplet className="size-3.5 text-accent" aria-hidden />
-              {preview.age}歳 → 1回あたりの推定量 <strong className="text-ink">{preview.volumeMl.toFixed(1)}ml</strong>
+              {t(`${preview.age}歳 → 1回あたりの推定量`, `Age ${preview.age} → est. volume per session`)}{" "}
+              <strong className="text-ink">{preview.volumeMl.toFixed(1)}ml</strong>
             </span>
           ) : (
-            "年齢から1回あたりの推定量（ml）を自動で設定します"
+            t("年齢から1回あたりの推定量（ml）を自動で設定します", "Your estimated volume (ml) per session is set from your age")
           )
         }
         icon={<Cake className="size-4" aria-hidden />}
@@ -129,11 +139,18 @@ export function RegisterForm({ countries }: { countries: CountryOption[] }) {
         />
       </Field>
 
-      <Field label="所属国" htmlFor="countryCode" error={fieldErrors.countryCode} icon={<Globe className="size-4" aria-hidden />}>
-        <select id="countryCode" name="countryCode" defaultValue="JP" aria-invalid={invalid("countryCode")} className={`${inputClass} appearance-auto`}>
-          {countries.map((country) => (
-            <option key={country.code} value={country.code}>
-              {country.name}（{country.code}）
+      <Field label={t("所属国", "Country")} htmlFor="countryCode" error={shownErrors.countryCode} icon={<Globe className="size-4" aria-hidden />}>
+        <select
+          id="countryCode"
+          name="countryCode"
+          value={selectedCountry}
+          onChange={(e) => setCountry(e.target.value)}
+          aria-invalid={invalid("countryCode")}
+          className={`${inputClass} appearance-auto`}
+        >
+          {countries[lang].map((option) => (
+            <option key={option.code} value={option.code}>
+              {option.name} ({option.code})
             </option>
           ))}
         </select>
@@ -141,7 +158,7 @@ export function RegisterForm({ countries }: { countries: CountryOption[] }) {
 
       {error && (
         <p role="alert" className="rounded-xl bg-red-500/10 px-3.5 py-2.5 text-sm text-red-300">
-          {error}
+          {translateMessage(error, lang)}
         </p>
       )}
 
@@ -151,13 +168,13 @@ export function RegisterForm({ countries }: { countries: CountryOption[] }) {
         className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-accent font-bold text-accent-ink transition hover:brightness-110 disabled:opacity-60"
       >
         {pending && <LoaderCircle className="size-4 animate-spin" aria-hidden />}
-        登録してはじめる
+        {t("登録してはじめる", "Sign up & start")}
       </button>
 
       <p className="text-center text-sm text-ink-2">
-        登録済みの方は{" "}
+        {t("登録済みの方は", "Already have an account?")}{" "}
         <Link href="/login" className="font-semibold text-accent hover:underline">
-          ログイン
+          {t("ログイン", "Log in")}
         </Link>
       </p>
     </form>

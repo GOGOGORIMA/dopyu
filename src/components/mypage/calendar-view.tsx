@@ -4,9 +4,13 @@ import { CalendarDays, ChevronLeft, ChevronRight, Droplet } from "lucide-react";
 import { useMemo, useState } from "react";
 import { computeCalendar, todayIn } from "@/lib/analytics";
 import { cn } from "@/lib/cn";
+import { useI18n } from "@/lib/i18n";
 import type { LocalEntry } from "@/lib/local-db";
 
-const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
+const WEEKDAYS = {
+  ja: ["日", "月", "火", "水", "木", "金", "土"],
+  en: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+};
 
 function shiftMonth(year: number, month: number, delta: number) {
   const index = year * 12 + (month - 1) + delta;
@@ -18,6 +22,7 @@ const toParam = ({ year, month }: { year: number; month: number }) =>
 
 /** Monthly calendar: days with entries get a stamp, plus a count badge when there are several. */
 export function CalendarView({ timeZone, entries }: { timeZone: string; entries: LocalEntry[] }) {
+  const { lang, t } = useI18n();
   const [month, setMonth] = useState<string | null>(null);
   const data = useMemo(() => {
     const today = todayIn(timeZone);
@@ -35,7 +40,7 @@ export function CalendarView({ timeZone, entries }: { timeZone: string; entries:
       <div className="flex items-center justify-between gap-2">
         <h2 id="calendar-title" className="flex items-center gap-1.5 font-semibold">
           <CalendarDays className="size-4 text-pink" aria-hidden />
-          カレンダー
+          {t("カレンダー", "Calendar")}
         </h2>
         <div className="flex items-center gap-1">
           <button
@@ -43,19 +48,19 @@ export function CalendarView({ timeZone, entries }: { timeZone: string; entries:
             onClick={() => data && setMonth(toParam(shiftMonth(data.year, data.month, -1)))}
             disabled={!data}
             className="rounded-full p-1.5 text-ink-2 transition hover:bg-surface-2 hover:text-ink disabled:opacity-40"
-            aria-label="前の月"
+            aria-label={t("前の月", "Previous month")}
           >
             <ChevronLeft className="size-5" />
           </button>
           <span className="min-w-[6.5rem] text-center text-sm font-semibold tabular-nums" aria-live="polite">
-            {data ? `${data.year}年${data.month}月` : "　"}
+            {data ? (lang === "en" ? `${new Date(Date.UTC(data.year, data.month - 1, 1)).toLocaleString("en-US", { month: "short", timeZone: "UTC" })} ${data.year}` : `${data.year}年${data.month}月`) : "　"}
           </span>
           <button
             type="button"
             onClick={() => data && setMonth(toParam(shiftMonth(data.year, data.month, 1)))}
             disabled={!data || isCurrentMonth}
             className="rounded-full p-1.5 text-ink-2 transition hover:bg-surface-2 hover:text-ink disabled:opacity-30"
-            aria-label="次の月"
+            aria-label={t("次の月", "Next month")}
           >
             <ChevronRight className="size-5" />
           </button>
@@ -65,7 +70,7 @@ export function CalendarView({ timeZone, entries }: { timeZone: string; entries:
               onClick={() => setMonth(null)}
               className="ml-1 rounded-full border border-line px-2.5 py-1 text-xs text-ink-2 transition hover:text-ink"
             >
-              今月
+              {t("今月", "Today")}
             </button>
           )}
         </div>
@@ -79,7 +84,7 @@ export function CalendarView({ timeZone, entries }: { timeZone: string; entries:
         // Keep the previous month visible at lower opacity while the next one loads (no layout jump)
         <div className={cn("transition-opacity", loading && "opacity-50")}>
           <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-medium text-muted">
-            {WEEKDAYS.map((w, i) => (
+            {WEEKDAYS[lang].map((w, i) => (
               <div key={w} className={cn("py-1", i === 0 && "text-pink/80", i === 6 && "text-accent/80")}>
                 {w}
               </div>
@@ -96,7 +101,7 @@ export function CalendarView({ timeZone, entries }: { timeZone: string; entries:
               return (
                 <div
                   key={day}
-                  aria-label={`${data.month}月${day}日${count > 0 ? ` ${count}回` : ""}`}
+                  aria-label={t(`${data.month}月${day}日${count > 0 ? ` ${count}回` : ""}`, `${data.month}/${day}${count > 0 ? ` ${count}x` : ""}`)}
                   className={cn(
                     "relative flex aspect-square flex-col items-center justify-center rounded-xl text-xs",
                     count > 0 ? "bg-violet/10" : "bg-bg/50",
@@ -128,7 +133,9 @@ export function CalendarView({ timeZone, entries }: { timeZone: string; entries:
             })}
           </div>
           <p className="mt-3 text-xs text-ink-2">
-            この月: <strong className="text-ink">{data.total}回</strong>（記録した日 {activeDays}日）
+            {t("この月: ", "This month: ")}
+            <strong className="text-ink">{t(`${data.total}回`, `${data.total}x`)}</strong>
+            {t(`（記録した日 ${activeDays}日）`, ` (${activeDays} active days)`)}
           </p>
         </div>
       )}

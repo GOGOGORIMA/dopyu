@@ -2,14 +2,17 @@ import { Crown, Medal, Sparkles } from "lucide-react";
 import { Avatar } from "@/components/avatar";
 import { Flag } from "@/components/flag";
 import { cn } from "@/lib/cn";
-import { METRIC_LABEL, type RankingMetric, type UserRanking, type UserRankingRow } from "@/lib/ranking";
+import { useI18n } from "@/lib/i18n";
+import { countryName, METRIC_LABELS } from "@/lib/i18n-dict";
+import type { RankingMetric, UserRanking, UserRankingRow } from "@/lib/ranking";
 import { METRIC_COLUMNS, MetricValue, metricColumnClass, metricText } from "./metric-format";
 import { RankBadge } from "./rank-badge";
 
 function MeChip() {
+  const { t } = useI18n();
   return (
     <span className="shrink-0 rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-bold text-accent">
-      あなた
+      {t("あなた", "You")}
     </span>
   );
 }
@@ -28,6 +31,7 @@ function PodiumCard({ row, metric }: { row: UserRankingRow; metric: RankingMetri
   const style = PODIUM_STYLE[Math.min(row.rank, 3) as 1 | 2 | 3];
   const Icon = row.rank === 1 ? Crown : Medal;
   const others = METRIC_COLUMNS.filter((m) => m !== metric);
+  const { lang, t } = useI18n();
   return (
     <li
       className={cn(
@@ -40,10 +44,10 @@ function PodiumCard({ row, metric }: { row: UserRankingRow; metric: RankingMetri
       )}
     >
       <Icon className={cn("size-6", style.text)} aria-hidden />
-      <span className={cn("mt-1 text-xs font-bold", style.text)}>{row.rank}位</span>
+      <span className={cn("mt-1 text-xs font-bold", style.text)}>{t(`${row.rank}位`, `#${row.rank}`)}</span>
       <Avatar avatar={row.avatar} name={row.username} className="mt-3 size-12" />
       <span className="mt-2 flex w-full min-w-0 items-center justify-center gap-1.5 text-sm font-semibold">
-        <Flag code={row.countryCode} name={row.countryName} />
+        <Flag code={row.countryCode} name={countryName(row.countryCode, lang)} />
         <span className="truncate" title={row.username}>{row.username}</span>
       </span>
       {row.isMe && <MeChip />}
@@ -55,13 +59,14 @@ function PodiumCard({ row, metric }: { row: UserRankingRow; metric: RankingMetri
         unitClassName="text-ink-2 font-medium"
       />
       <span className="text-[11px] text-muted">
-        {others.map((m) => metricText(m, valueOf(row, m), "user")).join(" · ")}
+        {others.map((m) => metricText(m, valueOf(row, m), "user", lang)).join(" · ")}
       </span>
     </li>
   );
 }
 
 function RankingRow({ row, metric }: { row: UserRankingRow; metric: RankingMetric }) {
+  const { lang } = useI18n();
   return (
     <tr className={cn("border-t border-line", row.isMe && "bg-accent/[0.07]")}>
       <td className="py-3 pr-1 pl-3 sm:pl-4">
@@ -70,7 +75,7 @@ function RankingRow({ row, metric }: { row: UserRankingRow; metric: RankingMetri
       <td className="max-w-0 py-3 pr-2">
         <div className="flex min-w-0 items-center gap-2 sm:gap-2.5">
           <Avatar avatar={row.avatar} name={row.username} className="size-8" />
-          <Flag code={row.countryCode} name={row.countryName} />
+          <Flag code={row.countryCode} name={countryName(row.countryCode, lang)} />
           <span className="truncate font-medium" title={row.username}>
             {row.username}
           </span>
@@ -96,12 +101,13 @@ function RankingRow({ row, metric }: { row: UserRankingRow; metric: RankingMetri
 
 export function UserRankingView({ ranking }: { ranking: UserRanking }) {
   const { rows, me, metric } = ranking;
+  const { lang, t } = useI18n();
   if (rows.length === 0) {
     return (
       <div className="rounded-3xl border border-line bg-surface px-6 py-14 text-center">
         <Sparkles className="mx-auto size-8 text-violet" aria-hidden />
-        <p className="mt-3 font-semibold">この期間の記録はまだありません</p>
-        <p className="mt-1 text-sm text-ink-2">最初の1位を狙いましょう。</p>
+        <p className="mt-3 font-semibold">{t("この期間の記録はまだありません", "No records in this period yet")}</p>
+        <p className="mt-1 text-sm text-ink-2">{t("最初の1位を狙いましょう。", "Go grab the first #1 spot.")}</p>
       </div>
     );
   }
@@ -113,7 +119,7 @@ export function UserRankingView({ ranking }: { ranking: UserRanking }) {
   return (
     <div className="space-y-4">
       {podium.length > 0 && (
-        <ol className="grid grid-cols-3 items-end gap-2 sm:gap-4" aria-label="トップ3">
+        <ol className="grid grid-cols-3 items-end gap-2 sm:gap-4" aria-label={t("トップ3", "Top 3")}>
           {podium.map((row) => (
             <PodiumCard key={row.username} row={row} metric={metric} />
           ))}
@@ -123,11 +129,11 @@ export function UserRankingView({ ranking }: { ranking: UserRanking }) {
       {(rest.length > 0 || meOutsideList) && (
         <div className="overflow-hidden rounded-3xl border border-line bg-surface">
           <table className="w-full table-fixed text-sm">
-            <caption className="sr-only">順位表（{METRIC_LABEL[metric]}順）</caption>
+            <caption className="sr-only">{t("順位表", "Leaderboard")}</caption>
             <thead>
               <tr className="text-left text-xs text-muted">
-                <th scope="col" className="w-14 py-2.5 pl-3 font-medium sm:w-16 sm:pl-4">順位</th>
-                <th scope="col" className="py-2.5 font-medium">ユーザー</th>
+                <th scope="col" className="w-14 py-2.5 pl-3 font-medium sm:w-16 sm:pl-4">{t("順位", "Rank")}</th>
+                <th scope="col" className="py-2.5 font-medium">{t("ユーザー", "User")}</th>
                 {METRIC_COLUMNS.map((column, i) => (
                   <th
                     key={column}
@@ -141,7 +147,7 @@ export function UserRankingView({ ranking }: { ranking: UserRanking }) {
                       column === metric && "text-ink",
                     )}
                   >
-                    {METRIC_LABEL[column]}
+                    {METRIC_LABELS[lang][column]}
                   </th>
                 ))}
               </tr>

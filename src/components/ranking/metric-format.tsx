@@ -1,25 +1,23 @@
+"use client";
+
 import { cn } from "@/lib/cn";
+import { useI18n, type Lang } from "@/lib/i18n";
 import type { RankingMetric } from "@/lib/ranking";
-import { formatCount } from "@/lib/time";
 
 /** Number + unit for a ranking metric. Personal average is ml/日, country average is ml/人. */
-export function metricParts(metric: RankingMetric, value: number, scope: "user" | "country") {
-  if (metric === "count") return { number: formatCount(value), unit: "回" };
+export function metricParts(metric: RankingMetric, value: number, scope: "user" | "country", lang: Lang = "ja") {
+  const loc = lang === "en" ? "en-US" : "ja-JP";
+  if (metric === "count") return { number: value.toLocaleString(loc), unit: lang === "en" ? "x" : "回" };
   if (metric === "average") {
     const digits = scope === "user" ? 2 : 1;
-    return {
-      number: value.toLocaleString("ja-JP", { minimumFractionDigits: digits, maximumFractionDigits: digits }),
-      unit: scope === "user" ? "ml/日" : "ml/人",
-    };
+    const unit = scope === "user" ? (lang === "en" ? "ml/day" : "ml/日") : lang === "en" ? "ml/user" : "ml/人";
+    return { number: value.toLocaleString(loc, { minimumFractionDigits: digits, maximumFractionDigits: digits }), unit };
   }
-  return {
-    number: value.toLocaleString("ja-JP", { minimumFractionDigits: 1, maximumFractionDigits: 1 }),
-    unit: "ml",
-  };
+  return { number: value.toLocaleString(loc, { minimumFractionDigits: 1, maximumFractionDigits: 1 }), unit: "ml" };
 }
 
-export function metricText(metric: RankingMetric, value: number, scope: "user" | "country") {
-  const { number, unit } = metricParts(metric, value, scope);
+export function metricText(metric: RankingMetric, value: number, scope: "user" | "country", lang: Lang = "ja") {
+  const { number, unit } = metricParts(metric, value, scope, lang);
   return `${number}${unit}`;
 }
 
@@ -36,7 +34,8 @@ export function MetricValue({
   className?: string;
   unitClassName?: string;
 }) {
-  const { number, unit } = metricParts(metric, value, scope);
+  const { lang } = useI18n();
+  const { number, unit } = metricParts(metric, value, scope, lang);
   return (
     <span className={cn("whitespace-nowrap tabular-nums", className)}>
       {number}

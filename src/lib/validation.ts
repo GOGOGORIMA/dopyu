@@ -139,11 +139,11 @@ export const createEntrySchema = z
 
 export type CreateEntryInput = z.infer<typeof createEntrySchema>;
 
-export const RANKING_TYPES = ["japan", "world", "worldcup"] as const;
+export const RANKING_TYPES = ["national", "world", "worldcup"] as const;
 export type RankingType = (typeof RANKING_TYPES)[number];
 
 export function parseRankingType(value: unknown): RankingType {
-  return RANKING_TYPES.includes(value as RankingType) ? (value as RankingType) : "japan";
+  return RANKING_TYPES.includes(value as RankingType) ? (value as RankingType) : "national";
 }
 
 /** Parses "YYYY-MM". Returns null when invalid. */

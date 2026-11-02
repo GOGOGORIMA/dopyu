@@ -6,7 +6,9 @@ import { computeStats } from "@/lib/analytics";
 import { PromoCard } from "@/components/promo-card";
 import { cn } from "@/lib/cn";
 import { getCurrentUser, listEntries, useDb } from "@/lib/local-db";
-import { formatCount, formatDurationJa, formatMl } from "@/lib/time";
+import { useI18n } from "@/lib/i18n";
+import { formatDuration } from "@/lib/i18n-dict";
+import { formatCount, formatMl, LOCAL } from "@/lib/time";
 import { CalendarView } from "./calendar-view";
 import { HourlyChart } from "./hourly-chart";
 import { RecentEntries } from "./recent-entries";
@@ -61,12 +63,14 @@ function useBrowserTimeZone(): string | null {
 export function MyDashboard() {
   // The browser's time zone sets the hour-of-day buckets and calendar dates
   const timeZone = useBrowserTimeZone();
+  const { lang, t } = useI18n();
   const entries = useDb(() => {
     const user = getCurrentUser();
     return user ? listEntries(user.id) : [];
   });
   const stats = useMemo(
-    () => (entries && timeZone ? computeStats(entries, timeZone) : null),
+    // Personal analytics use the device's local time (getFullYear / getMonth / getDate / getHours)
+    () => (entries && timeZone ? computeStats(entries, LOCAL) : null),
     [entries, timeZone],
   );
 
@@ -79,33 +83,36 @@ export function MyDashboard() {
         <StatTile
           icon={Repeat}
           accent="text-accent"
-          label={`${stats.year}年の総回数`}
+          label={t(`${stats.year}年の総回数`, `${stats.year} sessions`)}
           value={formatCount(summary.count)}
-          unit="回"
+          unit={t("回", "x")}
           sub={
             summary.excludedCount > 0
-              ? `ランキング対象 ${formatCount(summary.rankableCount)}回 · 対象外 ${formatCount(summary.excludedCount)}回`
-              : `記録した日 ${formatCount(summary.activeDays)}日`
+              ? t(
+                  `ランキング対象 ${formatCount(summary.rankableCount)}回 · 対象外 ${formatCount(summary.excludedCount)}回`,
+                  `${formatCount(summary.rankableCount)} ranked · ${formatCount(summary.excludedCount)} My Page only`,
+                )
+              : t(`記録した日 ${formatCount(summary.activeDays)}日`, `${formatCount(summary.activeDays)} active days`)
           }
         />
         <StatTile
           icon={Droplets}
           accent="text-violet"
-          label="推定総量"
+          label={t("推定総量", "Est. total volume")}
           value={formatMl(summary.totalVolumeMl)}
           unit="ml"
-          sub="年齢区分による推定値の合計"
+          sub={t("年齢区分による推定値の合計", "Sum of age-based estimates")}
         />
         <StatTile
           icon={Hourglass}
           accent="text-pink"
-          label="平均所要時間"
-          value={summary.averageDurationSeconds !== null ? formatDurationJa(summary.averageDurationSeconds) : "—"}
+          label={t("平均所要時間", "Avg session time")}
+          value={summary.averageDurationSeconds !== null ? formatDuration(summary.averageDurationSeconds, lang) : "—"}
           unit=""
           sub={
             summary.longestDurationSeconds !== null
-              ? `最長 ${formatDurationJa(summary.longestDurationSeconds)}`
-              : "ストップウォッチの平均値"
+              ? t(`最長 ${formatDuration(summary.longestDurationSeconds, "ja")}`, `Longest ${formatDuration(summary.longestDurationSeconds, "en")}`)
+              : t("ストップウォッチの平均値", "Stopwatch average")
           }
         />
       </div>
@@ -122,7 +129,7 @@ export function MyDashboard() {
 
       <div className="grid items-start gap-4 sm:gap-6 lg:grid-cols-5">
         <Card className="lg:col-span-3">
-          <CalendarView timeZone={timeZone} entries={entries} />
+          <CalendarView timeZone={LOCAL} entries={entries} />
         </Card>
         <Card className="lg:col-span-2">
           <RecentEntries entries={entries} />
@@ -130,7 +137,10 @@ export function MyDashboard() {
       </div>
 
       <p className="text-xs text-muted">
-        集計は {stats.year}年1月1日〜12月31日、お使いの端末のタイムゾーン（{stats.timeZone}）の時刻です。
+        {t(
+          `集計は ${stats.year}年1月1日〜12月31日、お使いの端末のローカル時刻（${timeZone}）です。ランキングは世界共通の UTC 基準です。`,
+          `Stats cover Jan 1 – Dec 31, ${stats.year} in your device's local time (${timeZone}). Rankings use UTC worldwide.`,
+        )}
       </p>
     </div>
   );
@@ -138,7 +148,7 @@ export function MyDashboard() {
 
 function DashboardSkeleton() {
   return (
-    <div className="space-y-4 sm:space-y-6" aria-busy="true" aria-label="読み込み中">
+    <div className="space-y-4 sm:space-y-6" aria-busy="true" aria-label="Loading">
       <div className="grid gap-3 sm:grid-cols-3 sm:gap-4">
         {[0, 1, 2].map((i) => (
           <div key={i} className="h-32 animate-pulse rounded-3xl bg-surface" />

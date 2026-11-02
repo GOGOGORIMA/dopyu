@@ -37,7 +37,12 @@ function getFormatter(timeZone: string): Intl.DateTimeFormat {
   return formatter;
 }
 
+/** Special zone names: competition rules use "UTC"; personal analytics use the device's "local" time. */
+export const UTC = "UTC";
+export const LOCAL = "local";
+
 export function isValidTimeZone(timeZone: unknown): timeZone is string {
+  if (timeZone === LOCAL) return true;
   if (typeof timeZone !== "string" || timeZone.length === 0 || timeZone.length > 64) {
     return false;
   }
@@ -55,6 +60,26 @@ export function resolveTimeZone(timeZone: unknown, fallback = DEFAULT_TIME_ZONE)
 
 /** Splits an instant into calendar date and time-of-day parts as seen in the given time zone. */
 export function getZonedParts(date: Date, timeZone: string): ZonedParts {
+  if (timeZone === UTC) {
+    return {
+      year: date.getUTCFullYear(),
+      month: date.getUTCMonth() + 1,
+      day: date.getUTCDate(),
+      hour: date.getUTCHours(),
+      minute: date.getUTCMinutes(),
+      second: date.getUTCSeconds(),
+    };
+  }
+  if (timeZone === LOCAL) {
+    return {
+      year: date.getFullYear(),
+      month: date.getMonth() + 1,
+      day: date.getDate(),
+      hour: date.getHours(),
+      minute: date.getMinutes(),
+      second: date.getSeconds(),
+    };
+  }
   const parts: Record<string, number> = {};
   for (const part of getFormatter(timeZone).formatToParts(date)) {
     if (part.type !== "literal") parts[part.type] = Number(part.value);
@@ -86,6 +111,8 @@ export function zonedTimeToUtc(
   minute = 0,
   second = 0,
 ): Date {
+  if (timeZone === UTC) return new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+  if (timeZone === LOCAL) return new Date(year, month - 1, day, hour, minute, second);
   const guess = Date.UTC(year, month - 1, day, hour, minute, second);
   const firstOffset = getOffsetMs(new Date(guess), timeZone);
   let result = guess - firstOffset;
@@ -161,7 +188,8 @@ export function formatCount(value: number): string {
 }
 
 /**
- * Time zone that sets the ranking's yearly period (Jan 1 to Dec 31).
- * Fixed at build time (NEXT_PUBLIC_APP_TIME_ZONE), default Asia/Tokyo.
+ * Competition rules (ranking periods, the 5-per-day limit) use UTC worldwide, so every country
+ * resets at the same moment (00:00 UTC = 09:00 JST) and changing the device time zone cannot
+ * be used to get extra ranked records.
  */
-export const APP_TIME_ZONE = resolveTimeZone(process.env.NEXT_PUBLIC_APP_TIME_ZONE, DEFAULT_TIME_ZONE);
+export const APP_TIME_ZONE = UTC;

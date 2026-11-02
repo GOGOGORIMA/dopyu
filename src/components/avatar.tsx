@@ -18,7 +18,7 @@ export function Avatar({
   if (avatar?.startsWith("data:image/")) {
     return (
       // eslint-disable-next-line @next/next/no-img-element -- data URL, nothing to optimize
-      <img src={avatar} alt={`${name}のアイコン`} className={cn(base, "object-cover")} />
+      <img src={avatar} alt={name} className={cn(base, "object-cover")} />
     );
   }
 
@@ -27,7 +27,7 @@ export function Avatar({
     return (
       <span
         role="img"
-        aria-label={`${name}のアイコン（${preset.label}）`}
+        aria-label={name}
         className={cn(base, "[container-type:size]")}
         style={{ backgroundImage: `linear-gradient(135deg, ${preset.from}, ${preset.to})` }}
       >
@@ -40,7 +40,7 @@ export function Avatar({
   }
 
   return (
-    <span role="img" aria-label={`${name}のアイコン（未設定）`} className={cn(base, "bg-surface-3 text-muted")}>
+    <span role="img" aria-label={name} className={cn(base, "bg-surface-3 text-muted")}>
       <UserRound className="size-[60%]" aria-hidden />
     </span>
   );

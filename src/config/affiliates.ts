@@ -13,7 +13,9 @@ export type AffiliateAd = {
   url: string;
 };
 
-export const AFFILIATES: Record<AffiliateSlot, AffiliateAd> = {
+/** Separate links and copy per UI language (ja: Japanese users, en: English-speaking users). */
+export const AFFILIATES: Record<"ja" | "en", Record<AffiliateSlot, AffiliateAd>> = {
+  ja: {
   // Shown on the stopwatch screen during the 30-minute cooldown ("賢者タイム")
   cooldown: {
     eyebrow: "賢者タイムのおともに",
@@ -37,5 +39,29 @@ export const AFFILIATES: Record<AffiliateSlot, AffiliateAd> = {
     description: "話題作・新作を人気ランキングからチェック",
     cta: "ランキングを見る",
     url: "https://example.com/affiliate/okazu",
+  },
+  },
+  en: {
+    cooldown: {
+      eyebrow: "Post-nut recovery",
+      title: "Recharge faster: Zinc & Vitality Supplements",
+      description: "Top-rated zinc and men's vitality supplements",
+      cta: "Check it out",
+      url: "https://example.com/affiliate/en/vitality",
+    },
+    endurance: {
+      eyebrow: "Health & fitness",
+      title: "Last longer: Stamina Training & Pelvic Floor Gear",
+      description: "Popular stamina trainers and wellness products",
+      cta: "Check it out",
+      url: "https://example.com/affiliate/en/stamina",
+    },
+    okazu: {
+      eyebrow: "Today's sauce",
+      title: "Trending Sauce: What's hot this week",
+      description: "Browse the top-ranked and newest picks",
+      cta: "See the ranking",
+      url: "https://example.com/affiliate/en/trending",
+    },
   },
 };

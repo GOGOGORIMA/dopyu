@@ -28,19 +28,19 @@ export function isCountryCode(value: unknown): value is CountryCode {
   return typeof value === "string" && COUNTRY_SET.has(value);
 }
 
-let displayNames: Intl.DisplayNames | null | undefined;
+const displayNames = new Map<string, Intl.DisplayNames | null>();
 
-/** Japanese country name. Falls back to the code if the runtime has no name data. */
-export function getCountryName(code: string): string {
-  if (displayNames === undefined) {
+/** Country name (Japanese by default). Falls back to the code if the runtime has no name data. */
+export function getCountryName(code: string, lang: "ja" | "en" = "ja"): string {
+  if (!displayNames.has(lang)) {
     try {
-      displayNames = new Intl.DisplayNames(["ja"], { type: "region", style: "short" });
+      displayNames.set(lang, new Intl.DisplayNames([lang], { type: "region", style: "short" }));
     } catch {
-      displayNames = null;
+      displayNames.set(lang, null);
     }
   }
   try {
-    return displayNames?.of(code) ?? code;
+    return displayNames.get(lang)?.of(code) ?? code;
   } catch {
     return code;
   }
@@ -53,10 +53,11 @@ export type CountryOption = { code: CountryCode; name: string };
  * Build this on the server and pass it to client components, so ICU differences
  * between server and browser cannot cause hydration mismatches.
  */
-export function getCountryOptions(): CountryOption[] {
-  const collator = new Intl.Collator("ja");
-  const options = COUNTRY_CODES.filter((code) => code !== DEFAULT_COUNTRY)
-    .map((code) => ({ code, name: getCountryName(code) }))
+export function getCountryOptions(lang: "ja" | "en" = "ja"): CountryOption[] {
+  const first: CountryCode = lang === "en" ? "US" : DEFAULT_COUNTRY;
+  const collator = new Intl.Collator(lang);
+  const options = COUNTRY_CODES.filter((code) => code !== first)
+    .map((code) => ({ code, name: getCountryName(code, lang) }))
     .sort((a, b) => collator.compare(a.name, b.name));
-  return [{ code: DEFAULT_COUNTRY, name: getCountryName(DEFAULT_COUNTRY) }, ...options];
+  return [{ code: first, name: getCountryName(first, lang) }, ...options];
 }

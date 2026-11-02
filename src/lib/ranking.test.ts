@@ -32,7 +32,7 @@ describe("computeUserRanking", () => {
   });
 
   it("Japan ranking only contains JP users", () => {
-    const r = computeUserRanking("japan", "volume", "all", null, now);
+    const r = computeUserRanking("national", "volume", "all", null, now, 100, "JP");
     assert.ok(r.rows.every((row) => row.countryCode === "JP"));
   });
 

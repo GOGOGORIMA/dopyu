@@ -46,7 +46,9 @@ export type UserRankingRow = {
 };
 
 export type UserRanking = {
-  type: "japan" | "world";
+  type: "national" | "world";
+  /** Country of the national ranking (null for world) */
+  countryCode: string | null;
   metric: RankingMetric;
   period: PeriodInfo;
   participantCount: number;
@@ -54,7 +56,7 @@ export type UserRanking = {
   /** The viewer's row (null = no ranked record in the period, or not eligible for this ranking) */
   me: UserRankingRow | null;
   gapToNext: GapToNext;
-  /** false when the viewer cannot appear here (Japan ranking, non-JP user) */
+  /** false when the viewer cannot appear here (national ranking of another country) */
   viewerEligible: boolean;
 };
 
@@ -198,19 +200,21 @@ export function metricPrecision(metric: RankingMetric, scope: "user" | "country"
 }
 
 export function computeUserRanking(
-  type: "japan" | "world",
+  type: "national" | "world",
   metric: RankingMetric,
   periodKey: RankingPeriodKey,
   viewer: LocalUser | null,
   now: Date = new Date(),
   limit = 100,
+  /** Country for the national ranking (defaults to the viewer's country, then JP) */
+  nationalCountry: string = viewer?.countryCode ?? "JP",
 ): UserRanking {
   const { info, start } = periodInfo(periodKey, now);
   const scoreOf = (a: Aggregate) =>
     metric === "volume" ? a.totalVolumeMl : metric === "average" ? a.averagePerDayMl : a.count;
 
   const sorted = collectParticipants(viewer, now)
-    .filter((p) => type === "world" || p.countryCode === "JP")
+    .filter((p) => type === "world" || p.countryCode === nationalCountry)
     .map((p) => aggregate(p, start, now))
     // Only people with at least one ranked record in the period take part
     .filter((a) => a.count > 0)
@@ -238,13 +242,14 @@ export function computeUserRanking(
   const me = rows.find((r) => r.isMe) ?? null;
   return {
     type,
+    countryCode: type === "national" ? nationalCountry : null,
     metric,
     period: info,
     participantCount: rows.length,
     rows: rows.slice(0, limit),
     me,
     gapToNext: gapToNext(rows, me, metricPrecision(metric, "user")),
-    viewerEligible: viewer !== null && (type === "world" || viewer.countryCode === "JP"),
+    viewerEligible: viewer !== null && (type === "world" || viewer.countryCode === nationalCountry),
   };
 }
 

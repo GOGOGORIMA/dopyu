@@ -1,9 +1,13 @@
+"use client";
+
 import { ArrowUp, Crown } from "lucide-react";
 import { Avatar } from "@/components/avatar";
 import { Flag } from "@/components/flag";
 import { XShareButton } from "@/components/share-button";
 import { cn } from "@/lib/cn";
-import { METRIC_LABEL, type GapToNext, type RankingMetric } from "@/lib/ranking";
+import { useI18n } from "@/lib/i18n";
+import { METRIC_LABELS } from "@/lib/i18n-dict";
+import type { GapToNext, RankingMetric } from "@/lib/ranking";
 import { MetricValue, metricText } from "./metric-format";
 import { RankBadge } from "./rank-badge";
 
@@ -31,11 +35,12 @@ type Props = {
  */
 export function MyRankBar(props: Props) {
   const { metric, scope, rank, score, gap } = props;
+  const { lang, t } = useI18n();
   return (
     <div
       className="fixed inset-x-0 bottom-[calc(4.25rem+env(safe-area-inset-bottom))] z-20 px-3 md:bottom-4"
       role="region"
-      aria-label={scope === "user" ? "あなたの現在順位" : "所属国の現在順位"}
+      aria-label={scope === "user" ? t("あなたの現在順位", "Your current rank") : t("所属国の現在順位", "Your country's rank")}
     >
       <div className="mx-auto flex max-w-5xl items-center gap-3 rounded-2xl border border-accent/40 bg-surface-2/95 px-3 py-2.5 shadow-2xl shadow-black/60 backdrop-blur-xl sm:px-4">
         <div className="w-11 shrink-0 text-center">
@@ -57,7 +62,7 @@ export function MyRankBar(props: Props) {
             {scope === "user" && props.countryCode && <Flag code={props.countryCode} name={props.countryName} />}
             <span className="truncate">{props.name}</span>
             <span className="shrink-0 rounded-full bg-accent/15 px-1.5 py-0.5 text-[10px] font-bold text-accent">
-              {scope === "user" ? "あなた" : "所属国"}
+              {scope === "user" ? t("あなた", "You") : t("所属国", "Yours")}
             </span>
           </p>
           <p className={cn("text-[11px] leading-snug sm:text-xs", rank === null ? "text-muted" : "text-ink-2")}>
@@ -66,24 +71,24 @@ export function MyRankBar(props: Props) {
             ) : gap ? (
               <span>
                 <ArrowUp className="mr-0.5 inline size-3 align-[-2px] text-accent" aria-hidden />
-                1つ上（{gap.rank}位）まであと{" "}
-                <strong className="font-semibold whitespace-nowrap text-ink">{metricText(metric, gap.gap, scope)}</strong>
+                {t(`1つ上（${gap.rank}位）まであと`, `To #${gap.rank}:`)}{" "}
+                <strong className="font-semibold whitespace-nowrap text-ink">{metricText(metric, gap.gap, scope, lang)}</strong>
               </span>
             ) : (
               <span className="inline-flex items-center gap-1 font-semibold text-gold">
                 <Crown className="size-3" aria-hidden />
-                現在1位！
+                {t("現在1位！", "You're #1!")}
               </span>
             )}
           </p>
         </div>
 
         <div className="shrink-0 text-right">
-          <p className="text-[10px] text-muted">{METRIC_LABEL[metric]}</p>
+          <p className="text-[10px] text-muted">{METRIC_LABELS[lang][metric]}</p>
           {score !== null && rank !== null ? (
             <MetricValue metric={metric} value={score} scope={scope} className="text-base font-bold sm:text-lg" />
           ) : (
-            <p className="text-sm font-semibold text-muted">未ランク</p>
+            <p className="text-sm font-semibold text-muted">{t("未ランク", "Unranked")}</p>
           )}
         </div>
         {props.shareUrl && rank !== null && <XShareButton href={props.shareUrl} compact className="size-9 shrink-0 p-0 sm:size-auto sm:px-3 sm:py-1.5" />}

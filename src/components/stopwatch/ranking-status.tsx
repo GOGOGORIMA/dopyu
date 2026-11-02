@@ -3,6 +3,7 @@
 import { Hourglass, ShieldCheck, Trophy } from "lucide-react";
 import { useEffect, useState } from "react";
 import { RANKING_DAILY_LIMIT } from "@/lib/constants";
+import { useI18n } from "@/lib/i18n";
 import { getCurrentUser, listEntries, useDb } from "@/lib/local-db";
 import { getRankingStatus } from "@/lib/ranking-rules";
 
@@ -41,6 +42,7 @@ export function useRankingStatusNow() {
  */
 export function RankingStatusBadges() {
   const status = useRankingStatusNow();
+  const { t } = useI18n();
   if (!status) return null;
   const cooldownMinutes = Math.ceil(status.cooldownRemainingSeconds / 60);
 
@@ -50,8 +52,10 @@ export function RankingStatusBadges() {
         <p className="flex items-start gap-2 rounded-2xl border border-amber-400/30 bg-amber-400/10 px-3.5 py-2.5 text-xs leading-relaxed text-amber-200">
           <Hourglass className="mt-px size-4 shrink-0" aria-hidden />
           <span>
-            <strong className="font-semibold">現在クールダウン中（あと{cooldownMinutes}分）</strong>
-            ：この記録はマイページにのみ保存されます
+            <strong className="font-semibold">
+              {t(`現在クールダウン中（あと${cooldownMinutes}分）`, `Cooldown (Post-Nut Clarity): ${cooldownMinutes}m remaining`)}
+            </strong>
+            {t("：この記録はマイページにのみ保存されます", " - Saves to My Page only")}
           </span>
         </p>
       )}
@@ -60,16 +64,22 @@ export function RankingStatusBadges() {
           <Trophy className="mt-px size-4 shrink-0 text-violet" aria-hidden />
           <span>
             <strong className="font-semibold">
-              本日のランキング集計上限（{status.rankedToday}/{RANKING_DAILY_LIMIT}回）達成済み
+              {t(
+                `本日のランキング集計上限（${status.rankedToday}/${RANKING_DAILY_LIMIT}回）達成済み`,
+                `Daily ranking limit reached (${status.rankedToday}/${RANKING_DAILY_LIMIT})`,
+              )}
             </strong>
-            ：以降の記録はマイページにのみ保存されます
+            {t("：以降の記録はマイページにのみ保存されます（UTC 0:00 にリセット）", " - further sessions save to My Page only (resets 00:00 UTC)")}
           </span>
         </p>
       )}
       {status.cooldownRemainingSeconds === 0 && !status.dailyLimitReached && (
         <p className="flex items-center justify-center gap-1.5 text-xs text-ink-2">
           <ShieldCheck className="size-3.5 text-accent" aria-hidden />
-          ランキング集計対象 · 本日 {status.rankedToday}/{RANKING_DAILY_LIMIT}回
+          {t(
+            `ランキング集計対象 · 本日 ${status.rankedToday}/${RANKING_DAILY_LIMIT}回（UTC）`,
+            `Ranked · today ${status.rankedToday}/${RANKING_DAILY_LIMIT} (UTC)`,
+          )}
         </p>
       )}
     </div>

@@ -18,7 +18,7 @@ export function RankBadge({ rank, className }: { rank: number; className?: strin
           medal,
           className,
         )}
-        aria-label={`${rank}位`}
+        aria-label={`#${rank}`}
       >
         <Icon className="size-3.5" aria-hidden />
         {rank}
@@ -31,7 +31,7 @@ export function RankBadge({ rank, className }: { rank: number; className?: strin
         "inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-surface-2 px-2 text-xs font-semibold text-ink-2 tabular-nums sm:h-8 sm:min-w-8 sm:text-sm",
         className,
       )}
-      aria-label={`${rank}位`}
+      aria-label={`#${rank}`}
     >
       {rank}
     </span>

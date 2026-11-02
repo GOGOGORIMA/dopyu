@@ -3,21 +3,24 @@
 import { History, LoaderCircle, Trash2, TriangleAlert } from "lucide-react";
 import { useMemo, useState } from "react";
 import { deleteEntry, type LocalEntry } from "@/lib/local-db";
-import { EXCLUSION_LABEL } from "@/lib/ranking-rules";
-import { formatDurationJa, formatMl } from "@/lib/time";
+import { useI18n } from "@/lib/i18n";
+import { EXCLUSION_LABELS, formatDuration, locale } from "@/lib/i18n-dict";
+import { formatMl } from "@/lib/time";
 
 type MyEntry = LocalEntry;
 
-const dateFormat = new Intl.DateTimeFormat("ja-JP", {
+const dateOptions: Intl.DateTimeFormatOptions = {
   month: "numeric",
   day: "numeric",
   weekday: "short",
   hour: "2-digit",
   minute: "2-digit",
-});
+};
 
 /** Recent entries (visible only to you). Entries saved by mistake can be deleted. */
 export function RecentEntries({ entries }: { entries: LocalEntry[] }) {
+  const { lang, t } = useI18n();
+  const dateFormat = new Intl.DateTimeFormat(locale(lang), dateOptions);
   const data = useMemo(
     () => ({ entries: [...entries].sort((a, b) => b.completedAt.localeCompare(a.completedAt)).slice(0, 10) }),
     [entries],
@@ -27,13 +30,14 @@ export function RecentEntries({ entries }: { entries: LocalEntry[] }) {
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   async function handleDelete(entry: MyEntry) {
-    if (!window.confirm(`${dateFormat.format(new Date(entry.completedAt))} の記録を削除しますか？`)) return;
+    const when = dateFormat.format(new Date(entry.completedAt));
+    if (!window.confirm(t(`${when} の記録を削除しますか？`, `Delete the session from ${when}?`))) return;
     setDeleting(entry.id);
     setDeleteError(null);
     try {
       deleteEntry(entry.id);
     } catch {
-      setDeleteError("削除に失敗しました");
+      setDeleteError(t("削除に失敗しました", "Could not delete"));
     } finally {
       setDeleting(null);
     }
@@ -43,7 +47,7 @@ export function RecentEntries({ entries }: { entries: LocalEntry[] }) {
     <section aria-labelledby="recent-title" className="space-y-3">
       <h2 id="recent-title" className="flex items-center gap-1.5 font-semibold">
         <History className="size-4 text-accent" aria-hidden />
-        最近の記録
+        {t("最近の記録", "Recent sessions")}
       </h2>
       {(error || deleteError) && <p className="text-sm text-red-300">{error ?? deleteError}</p>}
       {!data ? (
@@ -53,7 +57,7 @@ export function RecentEntries({ entries }: { entries: LocalEntry[] }) {
           ))}
         </div>
       ) : data.entries.length === 0 ? (
-        <p className="py-8 text-center text-sm text-muted">まだ記録がありません</p>
+        <p className="py-8 text-center text-sm text-muted">{t("まだ記録がありません", "No sessions yet")}</p>
       ) : (
         <ul className="divide-y divide-line">
           {data.entries.map((entry) => (
@@ -62,14 +66,15 @@ export function RecentEntries({ entries }: { entries: LocalEntry[] }) {
                 <div className="flex flex-wrap items-baseline gap-x-2 text-sm">
                   <span className="font-semibold">{dateFormat.format(new Date(entry.completedAt))}</span>
                   <span className="text-xs text-ink-2">
-                    {formatDurationJa(entry.durationSeconds)} · {formatMl(entry.volumeMl)}ml
+                    {formatDuration(entry.durationSeconds, lang)} · {formatMl(entry.volumeMl)}ml
                   </span>
                 </div>
                 <div className="mt-1 flex flex-wrap gap-1">
                   {!entry.isRanked && (
                     <span className="inline-flex items-center gap-1 rounded-full bg-amber-400/10 px-2 py-0.5 text-[11px] text-amber-200">
                       <TriangleAlert className="size-3" aria-hidden />
-                      マイページのみ{entry.rankExclusion ? `（${EXCLUSION_LABEL[entry.rankExclusion]}）` : ""}
+                      {t("マイページのみ", "My Page only")}
+                      {entry.rankExclusion ? ` (${EXCLUSION_LABELS[lang][entry.rankExclusion]})` : ""}
                     </span>
                   )}
                   {entry.tags.map((tag) => (
@@ -84,7 +89,7 @@ export function RecentEntries({ entries }: { entries: LocalEntry[] }) {
                 onClick={() => handleDelete(entry)}
                 disabled={deleting !== null}
                 className="shrink-0 rounded-full p-2 text-muted transition hover:bg-red-500/10 hover:text-red-300 disabled:opacity-40"
-                aria-label="この記録を削除"
+                aria-label={t("この記録を削除", "Delete this session")}
               >
                 {deleting === entry.id ? (
                   <LoaderCircle className="size-4 animate-spin" />

@@ -3,6 +3,7 @@
 import { Check, Plus, Tag, X } from "lucide-react";
 import { useId, useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
+import { useI18n } from "@/lib/i18n";
 import { MAX_TAG_LENGTH, MAX_TAGS_PER_ENTRY, normalizeTagName } from "@/lib/tags";
 
 export type TagSuggestion = { name: string; count: number };
@@ -26,6 +27,7 @@ export function TagPicker({
   onDraftChange: (value: string) => void;
 }) {
   const inputId = useId();
+  const { t } = useI18n();
   const [showAll, setShowAll] = useState(false);
   const full = selected.length >= MAX_TAGS_PER_ENTRY;
 
@@ -54,8 +56,8 @@ export function TagPicker({
       <div className="flex items-center justify-between">
         <label htmlFor={inputId} className="flex items-center gap-1.5 text-sm font-semibold">
           <Tag className="size-4 text-violet" aria-hidden />
-          オカズタグ
-          <span className="rounded-full bg-pink/15 px-1.5 py-0.5 text-[10px] font-bold text-pink">必須</span>
+          {t("オカズタグ", "Sauce / Tags")}
+          <span className="rounded-full bg-pink/15 px-1.5 py-0.5 text-[10px] font-bold text-pink">{t("必須", "Required")}</span>
         </label>
         <span className="text-xs text-muted tabular-nums">
           {selected.length}/{MAX_TAGS_PER_ENTRY}
@@ -76,7 +78,7 @@ export function TagPicker({
             e.preventDefault();
             add(draft);
           }}
-          placeholder={full ? "タグは最大10個までです" : "新しいタグを入力（例: 動画）"}
+          placeholder={full ? t("タグは最大10個までです", "Max 10 tags") : t("新しいタグを入力（例: 動画）", "Add today's sauce (e.g. video)")}
           autoComplete="off"
           enterKeyHint="done"
           className="h-11 min-w-0 flex-1 rounded-xl border border-line bg-bg px-3.5 text-[15px] outline-none transition placeholder:text-muted focus:border-accent/60 focus:ring-2 focus:ring-accent/20 disabled:opacity-50"
@@ -88,19 +90,19 @@ export function TagPicker({
           className="inline-flex h-11 shrink-0 items-center gap-1 rounded-xl bg-surface-3 px-3.5 text-sm font-semibold transition hover:bg-line-strong disabled:opacity-40"
         >
           <Plus className="size-4" aria-hidden />
-          追加
+          {t("追加", "Add")}
         </button>
       </div>
 
       {selected.length > 0 && (
-        <ul aria-label="選択中のタグ" className="flex flex-wrap gap-2">
+        <ul aria-label={t("選択中のタグ", "Selected tags")} className="flex flex-wrap gap-2">
           {selected.map((name) => (
             <li key={name}>
               <button
                 type="button"
                 onClick={() => remove(name)}
                 className="inline-flex animate-pop items-center gap-1.5 rounded-full bg-violet/20 py-1.5 pr-2 pl-3 text-sm font-medium text-ink ring-1 ring-violet/50 transition hover:bg-violet/30"
-                aria-label={`${name} を外す`}
+                aria-label={t(`${name} を外す`, `Remove ${name}`)}
               >
                 <Check className="size-3.5 text-violet" aria-hidden />
                 {name}
@@ -114,12 +116,12 @@ export function TagPicker({
       <div>
         <p className="mb-2 text-xs text-muted">
           {suggestions === null
-            ? "過去のタグを読み込み中…"
+            ? t("過去のタグを読み込み中…", "Loading your tags…")
             : suggestions.length === 0
-              ? "過去のタグはまだありません。最初のタグを追加してみましょう。"
+              ? t("過去のタグはまだありません。最初のタグを追加してみましょう。", "No tags yet. Add your first sauce!")
               : query
-                ? `「${draft.trim()}」に一致する過去のタグ`
-                : "過去のタグ（タップで選択・複数OK）"}
+                ? t(`「${draft.trim()}」に一致する過去のタグ`, `Your tags matching "${draft.trim()}"`)
+                : t("過去のタグ（タップで選択・複数OK）", "Your sauce (tap to pick, multiple OK)")}
         </p>
         {suggestions === null ? (
           <div className="flex flex-wrap gap-2" aria-hidden>
@@ -146,7 +148,7 @@ export function TagPicker({
               </li>
             ))}
             {query && filtered.length === 0 && normalizeTagName(draft) && (
-              <li className="text-xs text-muted">Enter で「{normalizeTagName(draft)}」を新規タグとして追加</li>
+              <li className="text-xs text-muted">{t(`Enter で「${normalizeTagName(draft)}」を新規タグとして追加`, `Press Enter to add "${normalizeTagName(draft)}"`)}</li>
             )}
           </ul>
         )}
@@ -156,7 +158,7 @@ export function TagPicker({
             onClick={() => setShowAll(true)}
             className="mt-2 text-xs font-medium text-accent hover:underline"
           >
-            すべて表示（{filtered.length}件）
+            {t(`すべて表示（${filtered.length}件）`, `Show all (${filtered.length})`)}
           </button>
         )}
       </div>

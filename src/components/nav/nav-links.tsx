@@ -4,11 +4,12 @@ import { ChartColumnBig, Timer, Trophy, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
+import { useI18n } from "@/lib/i18n";
 
-const NAV_ITEMS: { href: "/" | "/ranking" | "/mypage"; label: string; icon: LucideIcon }[] = [
-  { href: "/", label: "記録", icon: Timer },
-  { href: "/ranking", label: "ランキング", icon: Trophy },
-  { href: "/mypage", label: "マイページ", icon: ChartColumnBig },
+const NAV_ITEMS: { href: "/" | "/ranking" | "/mypage"; ja: string; en: string; icon: LucideIcon }[] = [
+  { href: "/", ja: "記録", en: "Track", icon: Timer },
+  { href: "/ranking", ja: "ランキング", en: "Ranking", icon: Trophy },
+  { href: "/mypage", ja: "マイページ", en: "My Page", icon: ChartColumnBig },
 ];
 
 function useIsActive() {
@@ -19,9 +20,10 @@ function useIsActive() {
 /** Header navigation for wide screens. */
 export function DesktopNav() {
   const isActive = useIsActive();
+  const { t } = useI18n();
   return (
-    <nav aria-label="メイン" className="hidden items-center gap-1 md:flex">
-      {NAV_ITEMS.map(({ href, label, icon: Icon }) => (
+    <nav aria-label="Main" className="hidden items-center gap-1 md:flex">
+      {NAV_ITEMS.map(({ href, ja, en, icon: Icon }) => (
         <Link
           key={href}
           href={href}
@@ -34,7 +36,7 @@ export function DesktopNav() {
           )}
         >
           <Icon className="size-4" aria-hidden />
-          {label}
+          {t(ja, en)}
         </Link>
       ))}
     </nav>
@@ -44,13 +46,14 @@ export function DesktopNav() {
 /** Bottom tab bar for phones. */
 export function BottomNav() {
   const isActive = useIsActive();
+  const { t } = useI18n();
   return (
     <nav
-      aria-label="メイン"
+      aria-label="Main"
       className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-bg/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden"
     >
       <ul className="mx-auto grid max-w-md grid-cols-3">
-        {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+        {NAV_ITEMS.map(({ href, ja, en, icon: Icon }) => {
           const active = isActive(href);
           return (
             <li key={href}>
@@ -63,7 +66,7 @@ export function BottomNav() {
                 )}
               >
                 <Icon className="size-5.5" aria-hidden strokeWidth={active ? 2.4 : 2} />
-                {label}
+                {t(ja, en)}
               </Link>
             </li>
           );
