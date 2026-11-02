@@ -1,0 +1,87 @@
+// DOPYU database schema
+//
+// Runs on SQLite in development. To move to PostgreSQL later, change only the
+// datasource provider and regenerate the migrations:
+// - No DB-specific features are used (enums, scalar lists, @db.* native types, raw SQL).
+// - IDs are cuid strings, which fit any database.
+// - Table and column names map to snake_case, following PostgreSQL convention.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id           String   @id @default(cuid())
+  /// Login ID. Always stored lowercased.
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  /// Public name shown in rankings.
+  username     String   @unique
+  /// Date of birth, stored as 00:00 UTC on that day. On PostgreSQL, adding @db.Date is recommended.
+  birthDate    DateTime @map("birth_date")
+  /// Country of affiliation (ISO 3166-1 alpha-2).
+  countryCode  String   @default("JP") @map("country_code")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  entries Entry[]
+  tags    Tag[]
+
+  @@index([countryCode])
+  @@map("users")
+}
+
+/// One recorded session (one press of the stopwatch "finish" button).
+model Entry {
+  id              String   @id @default(cuid())
+  userId          String   @map("user_id")
+  /// When the session was finished.
+  completedAt     DateTime @map("completed_at")
+  /// Measured stopwatch time, in seconds.
+  durationSeconds Int      @map("duration_seconds")
+  /// Estimated volume (ml) from the user's age at recording time.
+  /// Stored as a snapshot so past entries do not change as the user ages.
+  volumeMl        Float    @map("volume_ml")
+  /// Whether the entry counts toward rankings. Entries under 10 seconds are excluded (anti-cheat).
+  isRankable      Boolean  @default(true) @map("is_rankable")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  user User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tags EntryTag[]
+
+  @@index([userId, completedAt])
+  @@index([isRankable, completedAt])
+  @@map("entries")
+}
+
+/// Material ("okazu") tag. Each user has their own tags, never shown to anyone else.
+model Tag {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user    User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entries EntryTag[]
+
+  @@unique([userId, name])
+  @@map("tags")
+}
+
+/// Join table between entries and tags (many-to-many).
+model EntryTag {
+  entryId String @map("entry_id")
+  tagId   String @map("tag_id")
+
+  entry Entry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  tag   Tag   @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([entryId, tagId])
+  @@index([tagId])
+  @@map("entry_tags")
+}

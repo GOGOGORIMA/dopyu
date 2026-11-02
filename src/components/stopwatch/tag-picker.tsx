@@ -1,0 +1,164 @@
+"use client";
+
+import { Check, Plus, Tag, X } from "lucide-react";
+import { useId, useMemo, useState } from "react";
+import { cn } from "@/lib/cn";
+import { MAX_TAG_LENGTH, MAX_TAGS_PER_ENTRY, normalizeTagName } from "@/lib/tags";
+
+export type TagSuggestion = { name: string; count: number };
+
+/**
+ * Material tag input.
+ * - Type a new tag and press Enter or "追加"
+ * - Tap a chip to reuse a past tag (multiple selection)
+ */
+export function TagPicker({
+  suggestions,
+  selected,
+  onChange,
+  draft,
+  onDraftChange,
+}: {
+  suggestions: TagSuggestion[] | null;
+  selected: string[];
+  onChange: (tags: string[]) => void;
+  draft: string;
+  onDraftChange: (value: string) => void;
+}) {
+  const inputId = useId();
+  const [showAll, setShowAll] = useState(false);
+  const full = selected.length >= MAX_TAGS_PER_ENTRY;
+
+  const query = normalizeTagName(draft)?.toLowerCase() ?? "";
+  const filtered = useMemo(() => {
+    if (!suggestions) return [];
+    return suggestions.filter(
+      (tag) => !selected.includes(tag.name) && (!query || tag.name.toLowerCase().includes(query)),
+    );
+  }, [suggestions, selected, query]);
+  const visible = showAll || query ? filtered : filtered.slice(0, 16);
+
+  function add(raw: string) {
+    const name = normalizeTagName(raw);
+    if (!name || full) return;
+    if (!selected.includes(name)) onChange([...selected, name]);
+    onDraftChange("");
+  }
+
+  function remove(name: string) {
+    onChange(selected.filter((tag) => tag !== name));
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <label htmlFor={inputId} className="flex items-center gap-1.5 text-sm font-semibold">
+          <Tag className="size-4 text-violet" aria-hidden />
+          オカズタグ
+        </label>
+        <span className="text-xs text-muted tabular-nums">
+          {selected.length}/{MAX_TAGS_PER_ENTRY}
+        </span>
+      </div>
+
+      <div className="flex gap-2">
+        <input
+          id={inputId}
+          type="text"
+          value={draft}
+          maxLength={MAX_TAG_LENGTH}
+          disabled={full}
+          onChange={(e) => onDraftChange(e.target.value)}
+          onKeyDown={(e) => {
+            // Ignore the Enter that confirms an IME conversion (important for Japanese input)
+            if (e.key !== "Enter" || e.nativeEvent.isComposing || e.keyCode === 229) return;
+            e.preventDefault();
+            add(draft);
+          }}
+          placeholder={full ? "タグは最大10個までです" : "新しいタグを入力（例: 動画）"}
+          autoComplete="off"
+          enterKeyHint="done"
+          className="h-11 min-w-0 flex-1 rounded-xl border border-line bg-bg px-3.5 text-[15px] outline-none transition placeholder:text-muted focus:border-accent/60 focus:ring-2 focus:ring-accent/20 disabled:opacity-50"
+        />
+        <button
+          type="button"
+          onClick={() => add(draft)}
+          disabled={!normalizeTagName(draft) || full}
+          className="inline-flex h-11 shrink-0 items-center gap-1 rounded-xl bg-surface-3 px-3.5 text-sm font-semibold transition hover:bg-line-strong disabled:opacity-40"
+        >
+          <Plus className="size-4" aria-hidden />
+          追加
+        </button>
+      </div>
+
+      {selected.length > 0 && (
+        <ul aria-label="選択中のタグ" className="flex flex-wrap gap-2">
+          {selected.map((name) => (
+            <li key={name}>
+              <button
+                type="button"
+                onClick={() => remove(name)}
+                className="inline-flex animate-pop items-center gap-1.5 rounded-full bg-violet/20 py-1.5 pr-2 pl-3 text-sm font-medium text-ink ring-1 ring-violet/50 transition hover:bg-violet/30"
+                aria-label={`${name} を外す`}
+              >
+                <Check className="size-3.5 text-violet" aria-hidden />
+                {name}
+                <X className="size-3.5 text-ink-2" aria-hidden />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div>
+        <p className="mb-2 text-xs text-muted">
+          {suggestions === null
+            ? "過去のタグを読み込み中…"
+            : suggestions.length === 0
+              ? "過去のタグはまだありません。最初のタグを追加してみましょう。"
+              : query
+                ? `「${draft.trim()}」に一致する過去のタグ`
+                : "過去のタグ（タップで選択・複数OK）"}
+        </p>
+        {suggestions === null ? (
+          <div className="flex flex-wrap gap-2" aria-hidden>
+            {[56, 72, 48, 88, 64].map((w) => (
+              <span key={w} className="h-8 animate-pulse rounded-full bg-surface-2" style={{ width: w }} />
+            ))}
+          </div>
+        ) : (
+          <ul className="flex max-h-44 flex-wrap gap-2 overflow-y-auto pr-1">
+            {visible.map((tag) => (
+              <li key={tag.name}>
+                <button
+                  type="button"
+                  disabled={full}
+                  onClick={() => add(tag.name)}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-3 py-1.5 text-sm text-ink-2 transition",
+                    "hover:border-line-strong hover:text-ink disabled:opacity-40",
+                  )}
+                >
+                  {tag.name}
+                  {tag.count > 0 && <span className="text-[11px] text-muted tabular-nums">{tag.count}</span>}
+                </button>
+              </li>
+            ))}
+            {query && filtered.length === 0 && normalizeTagName(draft) && (
+              <li className="text-xs text-muted">Enter で「{normalizeTagName(draft)}」を新規タグとして追加</li>
+            )}
+          </ul>
+        )}
+        {!showAll && !query && filtered.length > visible.length && (
+          <button
+            type="button"
+            onClick={() => setShowAll(true)}
+            className="mt-2 text-xs font-medium text-accent hover:underline"
+          >
+            すべて表示（{filtered.length}件）
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}

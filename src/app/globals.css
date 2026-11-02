@@ -1,0 +1,121 @@
+@import "tailwindcss";
+
+/*
+ * DOPYU design tokens (dark theme)
+ * Chart colors were checked with the dataviz validator against the dark surface (#15151d):
+ *   accent #0aa5c4 / de-emphasis #64708a: contrast >= 3:1, lightness band OK, CVD separation OK
+ */
+@theme {
+  --color-bg: #0a0a10;
+  --color-surface: #15151d;
+  --color-surface-2: #1d1d28;
+  --color-surface-3: #262633;
+  --color-line: rgb(255 255 255 / 0.08);
+  --color-line-strong: rgb(255 255 255 / 0.16);
+
+  --color-ink: #f2f2f7;
+  --color-ink-2: #b9b9c8;
+  --color-muted: #858597;
+
+  --color-accent: #22d3ee;
+  --color-accent-ink: #03222b;
+  --color-violet: #a78bfa;
+  --color-pink: #f472b6;
+
+  --color-chart-accent: #0aa5c4;
+  --color-chart-muted: #64708a;
+  --color-chart-grid: #2a2a36;
+
+  --color-gold: #fbbf24;
+  --color-silver: #cbd5e1;
+  --color-bronze: #e09153;
+
+  --font-sans:
+    var(--font-geist-sans), "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP",
+    "Yu Gothic UI", Meiryo, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  --animate-pop: pop 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.3);
+  --animate-sheet: sheet 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+  --animate-fade: fade 0.2s ease-out;
+
+  @keyframes pop {
+    0% {
+      transform: scale(0.85);
+      opacity: 0;
+    }
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+  @keyframes sheet {
+    0% {
+      transform: translateY(24px);
+      opacity: 0;
+    }
+    100% {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+  @keyframes fade {
+    0% {
+      opacity: 0;
+    }
+    100% {
+      opacity: 1;
+    }
+  }
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html {
+  background-color: var(--color-bg);
+}
+
+body {
+  background-color: var(--color-bg);
+  background-image:
+    radial-gradient(60rem 30rem at 50% -12rem, rgb(34 211 238 / 0.1), transparent 70%),
+    radial-gradient(40rem 24rem at 100% 0%, rgb(167 139 250 / 0.08), transparent 70%);
+  background-repeat: no-repeat;
+  color: var(--color-ink);
+  -webkit-tap-highlight-color: transparent;
+  /* Avoid breaking Japanese text mid-phrase (e.g. "競お / う。") */
+  word-break: auto-phrase;
+  overflow-wrap: break-word;
+}
+
+/* Number input arrows are not needed */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Native date picker icon tuned for the dark UI */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.8);
+  cursor: pointer;
+}
+
+/* Flags (flag-icons): rounded corners and a subtle ring */
+.fi {
+  border-radius: 3px;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.12);
+  flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
