@@ -2,9 +2,13 @@
 
 import { CircleCheck, Flag, Pause, Play, RotateCcw, Trophy, TriangleAlert, X } from "lucide-react";
 import { useEffect, useState } from "react";
+import { PromoCard } from "@/components/promo-card";
+import { XShareButton } from "@/components/share-button";
 import { cn } from "@/lib/cn";
-import { formatMl } from "@/lib/time";
-import { RankingStatusBadges } from "./ranking-status";
+import { getCurrentUser, listEntries } from "@/lib/local-db";
+import { recordShareText, xShareUrl } from "@/lib/share";
+import { APP_TIME_ZONE, formatDurationJa, formatMl, getYearRange, getZonedParts } from "@/lib/time";
+import { RankingStatusBadges, useRankingStatusNow } from "./ranking-status";
 import { RecordDialog, type SavedEntryResult } from "./record-dialog";
 import { getElapsedMs, stopwatch, useStopwatchState } from "./stopwatch-store";
 
@@ -32,7 +36,10 @@ const STATUS_LABEL = {
   finished: "記録待ち",
 } as const;
 
-type Toast = { ranked: boolean; detail: string; reason: string | null };
+type Toast = { ranked: boolean; detail: string; reason: string | null; shareUrl: string; short: boolean };
+
+/** Endurance recommendation is shown when the measurement was shorter than this. */
+const ENDURANCE_PROMO_SECONDS = 180;
 
 export function StopwatchPanel() {
   const state = useStopwatchState();
@@ -51,11 +58,7 @@ export function StopwatchPanel() {
   const mainDigits = hours > 0 ? `${hours}:${pad(minutes)}:${pad(seconds)}` : `${pad(minutes)}:${pad(seconds)}`;
   const ringProgress = (elapsedMs % 60_000) / 60_000;
 
-  useEffect(() => {
-    if (!toast) return;
-    const timer = setTimeout(() => setToast(null), 7000);
-    return () => clearTimeout(timer);
-  }, [toast]);
+  const rankingStatus = useRankingStatusNow();
 
   function handleReset() {
     if (window.confirm("計測をリセットしますか？")) stopwatch.reset();
@@ -63,10 +66,23 @@ export function StopwatchPanel() {
 
   function handleSaved(result: SavedEntryResult) {
     stopwatch.reset();
+    // This year's total (ranking time zone) for the share text
+    const user = getCurrentUser();
+    const now = new Date();
+    const { start, end } = getYearRange(getZonedParts(now, APP_TIME_ZONE).year, APP_TIME_ZONE);
+    const yearTotal = (user ? listEntries(user.id) : [])
+      .filter((e) => {
+        const t = new Date(e.completedAt).getTime();
+        return t >= start.getTime() && t < end.getTime();
+      })
+      .reduce((sum, e) => sum + e.volumeMl, 0);
+    const { entry } = result;
     setToast({
-      ranked: result.entry.isRanked,
-      detail: `推定 ${formatMl(result.entry.volumeMl)}ml を記録`,
+      ranked: entry.isRanked,
+      detail: `推定 ${formatMl(entry.volumeMl)}ml を記録`,
       reason: result.exclusionLabel,
+      shareUrl: xShareUrl(recordShareText(formatDurationJa(entry.durationSeconds), entry.volumeMl, yearTotal)),
+      short: entry.durationSeconds < ENDURANCE_PROMO_SECONDS,
     });
   }
 
@@ -180,6 +196,14 @@ export function StopwatchPanel() {
         記録はすべてマイページに保存されます。ランキング集計の対象になるのは、計測120分以内・前回の記録から30分経過後・1日5回までの記録です。
       </p>
 
+      {/* Recommendation: during the cooldown ("賢者タイム") vs. normal */}
+      {rankingStatus && (
+        <PromoCard
+          slot={rankingStatus.cooldownRemainingSeconds > 0 ? "cooldown" : "okazu"}
+          className="mt-6 max-w-sm"
+        />
+      )}
+
       {state.status === "finished" && state.finishedAt !== null && (
         <RecordDialog
           startedAt={state.startedAt ?? state.finishedAt - state.accumulatedMs - state.pausedMs}
@@ -215,6 +239,8 @@ export function StopwatchPanel() {
                 </p>
               )}
               <p className="mt-1 text-sm text-ink-2">{toast.detail}</p>
+              <XShareButton href={toast.shareUrl} className="mt-3" />
+              {toast.short && <PromoCard slot="endurance" className="mt-3 bg-bg/60" />}
             </div>
             <button
               type="button"

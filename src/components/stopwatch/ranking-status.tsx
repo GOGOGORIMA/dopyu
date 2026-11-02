@@ -24,19 +24,24 @@ function useMinuteClock(refreshKey: unknown): number | null {
   return now;
 }
 
-/**
- * Badges on the stopwatch screen telling whether the next entry can count toward the ranking:
- * cooldown (30 min after the previous entry) and the 5-per-day limit.
- */
-export function RankingStatusBadges() {
+/** Live cooldown / daily-limit status for the logged-in user (null until hydrated). */
+export function useRankingStatusNow() {
   const entries = useDb(() => {
     const user = getCurrentUser();
     return user ? listEntries(user.id) : [];
   });
   const now = useMinuteClock(entries);
   if (now === null || entries === null) return null;
+  return getRankingStatus(entries, new Date(now));
+}
 
-  const status = getRankingStatus(entries, new Date(now));
+/**
+ * Badges on the stopwatch screen telling whether the next entry can count toward the ranking:
+ * cooldown (30 min after the previous entry) and the 5-per-day limit.
+ */
+export function RankingStatusBadges() {
+  const status = useRankingStatusNow();
+  if (!status) return null;
   const cooldownMinutes = Math.ceil(status.cooldownRemainingSeconds / 60);
 
   return (

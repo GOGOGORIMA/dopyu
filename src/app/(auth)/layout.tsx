@@ -1,6 +1,7 @@
 import { Lock } from "lucide-react";
 import { AuthGate } from "@/components/auth-gate";
 import { Logo } from "@/components/brand/logo";
+import { isSupabaseEnabled } from "@/lib/supabase";
 
 export default function AuthLayout({ children }: LayoutProps<"/">) {
   return (
@@ -14,7 +15,9 @@ export default function AuthLayout({ children }: LayoutProps<"/">) {
       </div>
       <p className="mt-6 flex items-center gap-1.5 text-xs text-muted">
         <Lock className="size-3.5" aria-hidden />
-        データはこのブラウザ内（localStorage）にのみ保存され、外部には送信されません。
+        {isSupabaseEnabled
+          ? "オカズタグや計測時間はあなただけに表示されます。ランキングには回数と推定量のみ公開されます。"
+          : "データはこのブラウザ内（localStorage）にのみ保存され、外部には送信されません。"}
       </p>
     </main>
   );

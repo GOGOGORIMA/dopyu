@@ -58,7 +58,10 @@ export function RegisterForm({ countries }: { countries: CountryOption[] }) {
     }
   }
 
-  const invalid = (name: string) => (fieldErrors[name] ? true : undefined);
+  // Client-side lock: block under-18 birth dates right away (the same rule runs again on submit)
+  const underage = preview !== null && preview.age < MIN_AGE;
+  const birthDateError = underage ? "18歳未満の方はご登録いただけません" : fieldErrors.birthDate;
+  const invalid = (name: string) => (fieldErrors[name] || (name === "birthDate" && underage) ? true : undefined);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5" noValidate>
@@ -101,7 +104,7 @@ export function RegisterForm({ countries }: { countries: CountryOption[] }) {
       <Field
         label="生年月日"
         htmlFor="birthDate"
-        error={fieldErrors.birthDate}
+        error={birthDateError}
         hint={
           preview ? (
             <span className="inline-flex items-center gap-1 text-ink-2">
@@ -144,7 +147,7 @@ export function RegisterForm({ countries }: { countries: CountryOption[] }) {
 
       <button
         type="submit"
-        disabled={pending}
+        disabled={pending || underage}
         className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-accent font-bold text-accent-ink transition hover:brightness-110 disabled:opacity-60"
       >
         {pending && <LoaderCircle className="size-4 animate-spin" aria-hidden />}

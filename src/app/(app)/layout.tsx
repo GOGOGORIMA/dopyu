@@ -16,7 +16,7 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
           <UserMenu />
         </div>
       </header>
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4 pt-6 pb-28 md:pb-12">
+      <main className="mx-auto w-full max-w-5xl flex-1 px-4 pt-6 pb-8 md:pb-12">
         <AuthGate mode="user">{children}</AuthGate>
       </main>
       <BottomNav />

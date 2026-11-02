@@ -1,8 +1,19 @@
 "use client";
 
-import { useMemo, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { isValidAvatar } from "./avatar";
 import { getCountryName } from "./countries";
+import {
+  isSupabaseEnabled,
+  remoteDeleteAccount,
+  remoteDeleteEntry,
+  remoteInsertEntry,
+  remoteSignIn,
+  remoteSignOut,
+  remoteSignUp,
+  remoteUpdateAvatar,
+  startRemoteRankingSync,
+} from "./supabase";
 import { normalizeTagList } from "./tags";
 import { createEntrySchema, loginSchema, registerSchema, toFieldErrors } from "./validation";
 import { calculateAge, estimateVolumeMl, estimateVolumeMlByAge } from "./volume";
@@ -32,6 +43,8 @@ export type LocalUser = {
   createdAt: string;
   /** "preset:<id>", a 128x128 data URL, or null (default icon). See src/lib/avatar.ts */
   avatar?: string | null;
+  /** true = account lives in Supabase (this record is a local cache of it) */
+  remote?: boolean;
 };
 
 export type LocalEntry = {
@@ -181,6 +194,27 @@ export async function registerUser(
   }
   if (Object.keys(fieldErrors).length > 0) throw new FormError("既に使われている項目があります", fieldErrors);
 
+  if (isSupabaseEnabled) {
+    let remote;
+    try {
+      remote = await remoteSignUp({
+        email: input.email,
+        password: input.password,
+        username: input.username,
+        countryCode: input.countryCode,
+        birthDate: input.birthDate.toISOString().slice(0, 10),
+        avatar: isValidAvatar(avatar) ? avatar : null,
+      });
+    } catch (err) {
+      throw new FormError(err instanceof Error ? err.message : "登録に失敗しました");
+    }
+    const user: LocalUser = { ...remote, passwordHash: "", salt: "", remote: true };
+    writeJson(USERS_KEY, [...users.filter((u) => u.id !== user.id), user]);
+    writeJson(SESSION_KEY, user.id);
+    emit();
+    return user;
+  }
+
   const salt = newId();
   const user: LocalUser = {
     id: newId(),
@@ -202,6 +236,23 @@ export async function registerUser(
 export async function loginUser(raw: Record<string, unknown>): Promise<LocalUser> {
   const parsed = loginSchema.safeParse(raw);
   if (!parsed.success) throw new FormError("入力内容を確認してください", toFieldErrors(parsed.error));
+  if (isSupabaseEnabled) {
+    let remote;
+    try {
+      remote = await remoteSignIn(parsed.data.email, parsed.data.password);
+    } catch (err) {
+      throw new FormError(err instanceof Error ? err.message : "ログインに失敗しました");
+    }
+    const cached: LocalUser = { ...remote.profile, passwordHash: "", salt: "", remote: true };
+    writeJson(USERS_KEY, [...listUsers().filter((u) => u.id !== cached.id), cached]);
+    writeJson(
+      entriesKey(cached.id),
+      remote.entries.map((e) => ({ ...e, rankExclusion: e.rankExclusion as LocalEntry["rankExclusion"] })),
+    );
+    writeJson(SESSION_KEY, cached.id);
+    emit();
+    return cached;
+  }
   const user = listUsers().find((u) => u.email === parsed.data.email);
   const hash = user ? await hashPassword(parsed.data.password, user.salt) : null;
   if (!user || hash !== user.passwordHash) {
@@ -222,9 +273,15 @@ export function updateAvatar(avatar: string | null) {
     listUsers().map((u) => (u.id === current.id ? { ...u, avatar } : u)),
   );
   emit();
+  if (current.remote) remoteUpdateAvatar(current.id, avatar).catch(reportSyncError);
+}
+
+function reportSyncError(err: unknown) {
+  console.error("[dopyu] Supabase sync failed", err);
 }
 
 export function logout() {
+  if (isSupabaseEnabled) remoteSignOut().catch(reportSyncError);
   try {
     window.localStorage.removeItem(SESSION_KEY);
   } catch {
@@ -299,6 +356,7 @@ export function createEntry(raw: {
   };
   writeJson(entriesKey(user.id), [...history, entry]);
   emit();
+  if (user.remote) remoteInsertEntry(user.id, entry).catch(reportSyncError);
   return { entry, exclusionLabel: decision.reason ? EXCLUSION_LABEL[decision.reason] : null };
 }
 
@@ -309,6 +367,34 @@ export function deleteEntry(entryId: string) {
     listEntries(user.id).filter((e) => e.id !== entryId),
   );
   emit();
+  if (user.remote) remoteDeleteEntry(entryId).catch(reportSyncError);
+}
+
+/**
+ * Deletes the logged-in account and every piece of its data:
+ * this browser's records, icon, session and stopwatch state, and (with Supabase) the server account
+ * with all its rows. Other accounts stored in this browser are left untouched.
+ */
+export async function deleteAccount(): Promise<void> {
+  const user = requireUser();
+  if (user.remote) await remoteDeleteAccount();
+  try {
+    window.localStorage.removeItem(entriesKey(user.id));
+    window.localStorage.removeItem(SESSION_KEY);
+    window.localStorage.removeItem("dopyu:stopwatch:v2");
+  } catch {
+    // ignore
+  }
+  writeJson(
+    USERS_KEY,
+    listUsers().filter((u) => u.id !== user.id),
+  );
+  emit();
+}
+
+/** Keeps the shared (Supabase) ranking data loaded and re-renders when it changes. */
+export function useRemoteRankingSync() {
+  useEffect(() => startRemoteRankingSync(emit), []);
 }
 
 /** The user's own past tags, most used first. */

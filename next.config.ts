@@ -13,6 +13,8 @@ const basePath = process.env.PAGES_BASE_PATH ?? (isProd ? "/dopyu" : "");
 const nextConfig: NextConfig = {
   output: "export",
   basePath,
+  // Exposed so client code can build absolute share URLs
+  env: { NEXT_PUBLIC_BASE_PATH: basePath },
   // /ranking -> /ranking/index.html, which every static host serves reliably
   trailingSlash: true,
   images: { unoptimized: true },

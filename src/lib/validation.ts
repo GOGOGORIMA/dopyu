@@ -51,7 +51,7 @@ const birthDateSchema = z
     error: "生年月日が正しくありません",
   })
   .refine((date) => calculateAge(date) >= MIN_AGE, {
-    error: `${MIN_AGE}歳未満の方はご利用いただけません`,
+    error: `${MIN_AGE}歳未満の方はご登録いただけません`,
   })
   .refine((date) => calculateAge(date) <= 120, { error: "生年月日が正しくありません" });
 

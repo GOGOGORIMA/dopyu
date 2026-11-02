@@ -2,6 +2,7 @@ import { getCountryName } from "./countries";
 import { getDummyParticipants, type ParticipantSource } from "./dummy-data";
 import { listEntries, listUsers, type LocalUser } from "./local-db";
 import { elapsedDays, getPeriodRange, type RankingPeriodKey } from "./ranking-period";
+import { getRemoteParticipants, isSupabaseEnabled } from "./supabase";
 import { APP_TIME_ZONE } from "./time";
 
 /**
@@ -87,8 +88,34 @@ const round2 = (v: number) => Math.round(v * 100) / 100;
 
 type Participant = ParticipantSource & { isMe: boolean };
 
-/** Dummy users + every account in this browser (with its ranked records). */
+/**
+ * Who takes part in the ranking:
+ * - Supabase mode: every registered user from the shared DB (the viewer's own records come from
+ *   the local cache so a just-saved record shows up immediately)
+ * - localStorage mode: built-in dummy users + every account in this browser
+ */
 function collectParticipants(viewer: LocalUser | null, now: Date): Participant[] {
+  if (isSupabaseEnabled) {
+    const remote = (getRemoteParticipants() ?? []).map((p) => ({ ...p, isMe: p.id === viewer?.id }));
+    if (viewer?.remote) {
+      const own = listEntries(viewer.id)
+        .filter((e) => e.isRanked)
+        .map((e) => ({ t: new Date(e.completedAt).getTime(), v: e.volumeMl }));
+      const index = remote.findIndex((p) => p.isMe);
+      const mine = {
+        id: viewer.id,
+        username: viewer.username,
+        avatar: viewer.avatar ?? null,
+        countryCode: viewer.countryCode,
+        joinedAt: new Date(viewer.createdAt).getTime(),
+        events: own,
+        isMe: true,
+      };
+      if (index >= 0) remote[index] = mine;
+      else remote.push(mine);
+    }
+    return remote;
+  }
   const dummies = getDummyParticipants(now).map((d) => ({ ...d, isMe: false }));
   const locals = listUsers().map((user) => {
     const entries = listEntries(user.id);

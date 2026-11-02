@@ -3,6 +3,7 @@
 import { Droplets, Hourglass, Repeat, type LucideIcon } from "lucide-react";
 import { useMemo, useSyncExternalStore, type ReactNode } from "react";
 import { computeStats } from "@/lib/analytics";
+import { PromoCard } from "@/components/promo-card";
 import { cn } from "@/lib/cn";
 import { getCurrentUser, listEntries, useDb } from "@/lib/local-db";
 import { formatCount, formatDurationJa, formatMl } from "@/lib/time";
@@ -115,6 +116,7 @@ export function MyDashboard() {
         </Card>
         <Card className="lg:col-span-2">
           <TopTags tags={stats.topTags} />
+          <PromoCard slot="okazu" className="mt-4 bg-bg/60" />
         </Card>
       </div>
 

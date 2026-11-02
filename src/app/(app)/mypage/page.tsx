@@ -1,5 +1,6 @@
 import { Lock } from "lucide-react";
 import type { Metadata } from "next";
+import { AccountSettings } from "@/components/mypage/account-settings";
 import { MyDashboard } from "@/components/mypage/dashboard";
 import { ProfileCard } from "@/components/mypage/profile-card";
 
@@ -21,6 +22,7 @@ export default function MyPage() {
       <ProfileCard />
       {/* Everything is computed in the browser from this browser's localStorage */}
       <MyDashboard />
+      <AccountSettings />
     </div>
   );
 }

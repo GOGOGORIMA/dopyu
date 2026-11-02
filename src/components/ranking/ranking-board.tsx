@@ -4,9 +4,10 @@ import { ArrowDownWideNarrow, CalendarDays, Earth, Info, Lock, RotateCcw, Trophy
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { getCountryName } from "@/lib/countries";
-import { getCurrentUser, useDb } from "@/lib/local-db";
+import { getCurrentUser, useDb, useRemoteRankingSync } from "@/lib/local-db";
 import { computeCountryRanking, computeUserRanking, METRIC_LABEL, RANKING_METRICS, type PeriodInfo, type RankingMetric } from "@/lib/ranking";
 import { formatCountdown, PERIOD_LABEL, RANKING_PERIODS, type RankingPeriodKey } from "@/lib/ranking-period";
+import { rankShareText, xShareUrl } from "@/lib/share";
 import type { RankingType } from "@/lib/validation";
 import { CountryRankingView } from "./country-ranking";
 import { MyRankBar } from "./my-rank-bar";
@@ -95,6 +96,7 @@ export function RankingBoard() {
   const [period, setPeriod] = useState<RankingPeriodKey>("year");
   const [metric, setMetric] = useState<RankingMetric>("volume");
   const now = useClock();
+  useRemoteRankingSync();
   const minute = now === null ? 0 : Math.floor(now / 60_000);
 
   const data = useDb(() => {
@@ -203,6 +205,13 @@ export function RankingBoard() {
                 countryCode={viewer.countryCode}
                 countryName={getCountryName(viewer.countryCode)}
                 unrankedText="未ランク（所属国の記録なし）"
+                shareUrl={
+                  ranking.mine
+                    ? xShareUrl(
+                        rankShareText(PERIOD_LABEL[period], `ワールドカップ（${getCountryName(viewer.countryCode)}）`, ranking.mine.rank, ranking.mine.totalVolumeMl),
+                      )
+                    : null
+                }
               />
             ) : (
               <MyRankBar
@@ -217,6 +226,13 @@ export function RankingBoard() {
                 countryName={getCountryName(viewer.countryCode)}
                 unrankedText={
                   ranking.viewerEligible ? "未ランク（記録なし）" : "対象外（日本ランキングは所属国が日本のユーザーのみ）"
+                }
+                shareUrl={
+                  ranking.me
+                    ? xShareUrl(
+                        rankShareText(PERIOD_LABEL[period], ranking.type === "japan" ? "国内" : "世界", ranking.me.rank, ranking.me.totalVolumeMl),
+                      )
+                    : null
                 }
               />
             ))}

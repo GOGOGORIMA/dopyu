@@ -1,6 +1,7 @@
 import { ArrowUp, Crown } from "lucide-react";
 import { Avatar } from "@/components/avatar";
 import { Flag } from "@/components/flag";
+import { XShareButton } from "@/components/share-button";
 import { cn } from "@/lib/cn";
 import { METRIC_LABEL, type GapToNext, type RankingMetric } from "@/lib/ranking";
 import { MetricValue, metricText } from "./metric-format";
@@ -20,6 +21,8 @@ type Props = {
   countryName?: string;
   /** Text shown when not ranked */
   unrankedText: string;
+  /** X share intent URL (only when ranked) */
+  shareUrl?: string | null;
 };
 
 /**
@@ -83,6 +86,7 @@ export function MyRankBar(props: Props) {
             <p className="text-sm font-semibold text-muted">未ランク</p>
           )}
         </div>
+        {props.shareUrl && rank !== null && <XShareButton href={props.shareUrl} compact className="size-9 shrink-0 p-0 sm:size-auto sm:px-3 sm:py-1.5" />}
       </div>
     </div>
   );
