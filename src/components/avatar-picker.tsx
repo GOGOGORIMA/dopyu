@@ -7,6 +7,7 @@ import { AVATAR_PRESETS, presetAvatar, resizeImageToAvatar } from "@/lib/avatar"
 import { cn } from "@/lib/cn";
 import { useI18n } from "@/lib/i18n";
 import { translateMessage } from "@/lib/i18n-dict";
+import { isSupabaseEnabled } from "@/lib/supabase";
 
 /**
  * Icon picker: upload an image (resized to 128x128 WebP/JPEG 0.7 in the browser)
@@ -77,7 +78,14 @@ export function AvatarPicker({
           )}
         </div>
       </div>
-      <p className="text-xs text-muted">{t("画像は 128×128px に自動で切り抜き・圧縮して保存します。", "Images are auto-cropped and compressed to 128×128px.")}</p>
+      <p className="text-xs text-muted">
+        {t("画像は 128×128px に自動で切り抜き・圧縮して保存します。", "Images are auto-cropped and compressed to 128×128px.")}
+        {isSupabaseEnabled &&
+          t(
+            "アップロード画像はこの端末にのみ保存され、ランキングでは他のユーザーにデフォルトアイコンで表示されます（公開されるのはプリセットのみ）。",
+            " Uploaded images stay on this device; other users see the default icon in rankings (only presets are shared).",
+          )}
+      </p>
       {error && <p className="text-xs text-red-300">{translateMessage(error, lang)}</p>}
 
       <div>

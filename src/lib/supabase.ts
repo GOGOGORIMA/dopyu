@@ -1,10 +1,23 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import {
+  SERVER_ENTRY_COLUMNS,
+  SERVER_PROFILE_COLUMNS,
+  fromServerAvatar,
+  toServerAvatar,
+  toServerEntry,
+  toServerProfile,
+  type ServerEntryRow,
+  type ServerProfileRow,
+} from "./server-payload";
 
 /**
  * Optional Supabase backend (hybrid mode).
  * When NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are set at build time,
- * accounts, records, icons and rankings are shared through Supabase (schema: supabase/schema.sql).
+ * accounts and competition records are shared through Supabase (schema: supabase/schema.sql).
  * Otherwise the app keeps working with localStorage only.
+ *
+ * Privacy: only the columns in src/lib/server-payload.ts are ever sent. Okazu tags (Sauce),
+ * birth date, start time and uploaded icon images stay in localStorage on the user's device.
  */
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -18,38 +31,35 @@ export function getSupabase(): SupabaseClient | null {
   return client;
 }
 
+/** Competition data only (see src/lib/server-payload.ts). Tags, start time etc. are never on the server. */
 export type RemoteEntry = {
   id: string;
-  startTime: string;
   completedAt: string;
   durationSeconds: number;
   volumeMl: number;
   isRanked: boolean;
-  rankExclusion: string | null;
-  tags: string[];
 };
 
 export type RemoteProfile = {
   id: string;
+  /** From Supabase Auth (login only); not stored in any table */
   email: string;
   username: string;
   countryCode: string;
+  /** "preset:<id>" or null */
   avatar: string | null;
-  birthDate: string;
-  createdAt: string;
 };
 
 function fail(error: { message: string } | null, fallback: string): never | void {
   if (error) throw new Error(`${fallback}（${error.message}）`);
 }
 
-/** Sign up, then create the public profile and the private birth date row. */
+/** Sign up, then create the public profile (username, country, preset icon ID only). */
 export async function remoteSignUp(input: {
   email: string;
   password: string;
   username: string;
   countryCode: string;
-  birthDate: string;
   avatar: string | null;
 }): Promise<RemoteProfile> {
   const sb = getSupabase()!;
@@ -61,78 +71,51 @@ export async function remoteSignUp(input: {
     throw new Error("確認メールを送信しました。メール内のリンクで認証してからログインしてください");
   }
   const id = data.user.id;
-  const profile = await sb.from("profiles").insert({
-    id,
-    username: input.username,
-    country_code: input.countryCode,
-    avatar: input.avatar,
-  });
+  const row = toServerProfile({ id, username: input.username, countryCode: input.countryCode, avatar: input.avatar });
+  const profile = await sb.from("profiles").insert(row);
   fail(profile.error, "プロフィールの作成に失敗しました");
-  const priv = await sb.from("private_profiles").insert({ id, birth_date: input.birthDate });
-  fail(priv.error, "プロフィールの作成に失敗しました");
-  return { id, email: input.email, username: input.username, countryCode: input.countryCode, avatar: input.avatar, birthDate: input.birthDate, createdAt: new Date().toISOString() };
+  return { id, email: input.email, username: row.username!, countryCode: row.country_code!, avatar: fromServerAvatar(row.avatar_preset) };
 }
 
-/** Sign in and download the user's own profile and records (including private details). */
+/** Sign in and download the user's profile and competition records. */
 export async function remoteSignIn(email: string, password: string): Promise<{ profile: RemoteProfile; entries: RemoteEntry[] }> {
   const sb = getSupabase()!;
   const { data, error } = await sb.auth.signInWithPassword({ email, password });
   if (error || !data.user) throw new Error("メールアドレスまたはパスワードが正しくありません");
   const id = data.user.id;
-  const [prof, priv, ents, details] = await Promise.all([
-    sb.from("profiles").select("*").eq("id", id).single(),
-    sb.from("private_profiles").select("birth_date").eq("id", id).single(),
-    sb.from("entries").select("*").eq("user_id", id),
-    sb.from("entry_details").select("*").eq("user_id", id),
+  const [prof, ents] = await Promise.all([
+    sb.from("profiles").select(SERVER_PROFILE_COLUMNS.join(", ")).eq("id", id).single<ServerProfileRow>(),
+    sb.from("entries").select(SERVER_ENTRY_COLUMNS.join(", ")).eq("user_id", id).returns<ServerEntryRow[]>(),
   ]);
   fail(prof.error, "プロフィールを読み込めませんでした");
-  const detailById = new Map((details.data ?? []).map((d) => [d.entry_id as string, d]));
+  fail(ents.error, "記録を読み込めませんでした");
   return {
     profile: {
       id,
       email,
-      username: prof.data.username,
-      countryCode: prof.data.country_code,
-      avatar: prof.data.avatar,
-      birthDate: priv.data?.birth_date ?? "1990-01-01",
-      createdAt: prof.data.created_at,
+      username: prof.data!.username!,
+      countryCode: prof.data!.country_code!,
+      avatar: fromServerAvatar(prof.data!.avatar_preset),
     },
-    entries: (ents.data ?? []).map((e) => {
-      const d = detailById.get(e.id);
-      return {
-        id: e.id,
-        startTime: d?.start_time ?? e.completed_at,
-        completedAt: e.completed_at,
-        durationSeconds: d?.duration_seconds ?? 0,
-        volumeMl: e.volume_ml,
-        isRanked: e.is_ranked,
-        rankExclusion: e.rank_exclusion,
-        tags: d?.tags ?? [],
-      };
-    }),
+    entries: (ents.data ?? []).map((e) => ({
+      id: e.id,
+      completedAt: e.completed_at,
+      durationSeconds: e.duration_seconds,
+      volumeMl: e.volume_ml,
+      isRanked: e.is_ranked,
+    })),
   };
 }
 
-export async function remoteInsertEntry(userId: string, e: RemoteEntry) {
+/** Sends the competition fields of a record. Tags and other private fields are dropped by toServerEntry. */
+export async function remoteInsertEntry(
+  userId: string,
+  e: { id: string; completedAt: string; durationSeconds: number; volumeMl: number; isRanked: boolean },
+) {
   const sb = getSupabase();
   if (!sb) return;
-  const pub = await sb.from("entries").insert({
-    id: e.id,
-    user_id: userId,
-    completed_at: e.completedAt,
-    volume_ml: e.volumeMl,
-    is_ranked: e.isRanked,
-    rank_exclusion: e.rankExclusion,
-  });
-  fail(pub.error, "記録の同期に失敗しました");
-  const priv = await sb.from("entry_details").insert({
-    entry_id: e.id,
-    user_id: userId,
-    start_time: e.startTime,
-    duration_seconds: e.durationSeconds,
-    tags: e.tags,
-  });
-  fail(priv.error, "記録の同期に失敗しました");
+  const { error } = await sb.from("entries").insert(toServerEntry(userId, e));
+  fail(error, "記録の同期に失敗しました");
 }
 
 export async function remoteDeleteEntry(entryId: string) {
@@ -142,10 +125,11 @@ export async function remoteDeleteEntry(entryId: string) {
   fail(error, "記録の削除に失敗しました");
 }
 
+/** Shares the icon only when it is a built-in preset; an uploaded image is kept on this device (sent as null). */
 export async function remoteUpdateAvatar(userId: string, avatar: string | null) {
   const sb = getSupabase();
   if (!sb) return;
-  const { error } = await sb.from("profiles").update({ avatar }).eq("id", userId);
+  const { error } = await sb.from("profiles").update({ avatar_preset: toServerAvatar(avatar) }).eq("id", userId);
   fail(error, "アイコンの保存に失敗しました");
 }
 
@@ -196,10 +180,10 @@ async function fetchAll<T>(table: string, columns: string, rankedOnly = false): 
 }
 
 async function refresh() {
-  type P = { id: string; username: string; country_code: string; avatar: string | null; created_at: string };
+  type P = { id: string; username: string; country_code: string; avatar_preset: string | null };
   type E = { user_id: string; completed_at: string; volume_ml: number };
   const [profiles, entries] = await Promise.all([
-    fetchAll<P>("profiles", "id, username, country_code, avatar, created_at"),
+    fetchAll<P>("profiles", "id, username, country_code, avatar_preset"),
     fetchAll<E>("entries", "user_id, completed_at, volume_ml", true),
   ]);
   const events = new Map<string, { t: number; v: number }[]>();
@@ -208,14 +192,19 @@ async function refresh() {
     list.push({ t: new Date(e.completed_at).getTime(), v: e.volume_ml });
     events.set(e.user_id, list);
   }
-  participants = profiles.map((p) => ({
-    id: p.id,
-    username: p.username,
-    avatar: p.avatar,
-    countryCode: p.country_code,
-    joinedAt: new Date(p.created_at).getTime(),
-    events: events.get(p.id) ?? [],
-  }));
+  const now = Date.now();
+  participants = profiles.map((p) => {
+    const list = events.get(p.id) ?? [];
+    return {
+      id: p.id,
+      username: p.username,
+      avatar: fromServerAvatar(p.avatar_preset),
+      countryCode: p.country_code,
+      // No sign-up date is stored on the server: the first ranked record counts as the join date
+      joinedAt: list.reduce((min, e) => Math.min(min, e.t), now),
+      events: list,
+    };
+  });
   for (const l of listeners) l();
 }
 

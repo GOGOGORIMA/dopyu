@@ -8,6 +8,7 @@ import {
 } from "./constants";
 import { isCountryCode } from "./countries";
 import { MAX_TAGS_PER_ENTRY, normalizeTagList } from "./tags";
+import { USERNAME_FILTER_MESSAGES, checkUsername, type UsernameFilterReason } from "./username-filter";
 import { calculateAge } from "./volume";
 
 /** Tolerance for client clocks running ahead. */
@@ -38,12 +39,17 @@ const usernameSchema = z
       .string()
       .min(2, { error: "ユーザーネームは2文字以上にしてください" })
       .max(20, { error: "ユーザーネームは20文字以内にしてください" })
+      // Personal information / NG words (checked before the character rule for a clearer message)
+      .superRefine((value, ctx) => {
+        const reason: UsernameFilterReason | null = checkUsername(value);
+        if (reason) ctx.addIssue({ code: "custom", message: USERNAME_FILTER_MESSAGES[reason] });
+      })
       .regex(/^[\p{L}\p{N}_.-]+$/u, {
         error: "使える文字は文字・数字・_ . - のみです（スペース不可）",
       }),
   );
 
-const birthDateSchema = z
+export const birthDateSchema = z
   .string({ error: "生年月日を入力してください" })
   .pipe(z.iso.date({ error: "生年月日の形式が正しくありません" }))
   .transform((value) => new Date(`${value}T00:00:00.000Z`))

@@ -1,6 +1,7 @@
 "use client";
 
 import { useI18n } from "@/lib/i18n";
+import { TAG_PRIVACY_NOTE } from "@/lib/i18n-dict";
 
 type Section = { ja: [string, string[]]; en: [string, string[]] };
 
@@ -53,13 +54,15 @@ const TERMS: Section[] = [
     ja: [
       "4. 広告の配信について（プロモーション表記）",
       [
-        "本アプリ内の「おすすめ枠」等には、アフィリエイトプログラム（Amazonアソシエイト、DMMアフィリエイト等の第三者配信広告）によるプロモーションリンクが含まれます。",
+        "本アプリ内の「おすすめ枠」は広告です。アフィリエイトプログラム（Amazonアソシエイト、DMMアフィリエイト等の第三者配信広告）によるプロモーションリンクであり、各カードに「PR」と表示しています。",
+        "掲載商品は医薬品ではなく、疾病の治療・予防や身体機能の改善等の効果・効能を示すものではありません。",
       ],
     ],
     en: [
       "4. Advertising Disclosure",
       [
-        "\"Sponsored\" cards in the app contain promotional affiliate links (third-party programs such as Amazon Associates and other affiliate networks).",
+        "\"Sponsored\" cards in the app are advertisements: promotional affiliate links (third-party programs such as Amazon Associates and other affiliate networks), each marked \"PR\".",
+        "Featured products are not medicines and make no claim to diagnose, treat, cure or prevent any disease or to improve any bodily function.",
       ],
     ],
   },
@@ -71,14 +74,16 @@ const TERMS: Section[] = [
 
 const PRIVACY: Record<"ja" | "en", string[]> = {
   ja: [
-    "登録されたメールアドレス・生年月日等の個人情報は認証および統計算出のみに利用し、個人の「オカズタグ」等のプライベートな記録が他のユーザーに公開されることはありません。",
-    "ランキングに公開される情報は、ユーザーネーム・所属国・アイコン・ランキング対象の記録日時と推定量のみです。",
-    "マイページの「全データを削除して退会する」から、いつでもアカウントとすべての記録を完全に削除できます。",
+    "【端末内のみに保存されるデータ】オカズタグ、生年月日、計測の開始時刻、ランキング対象外の理由、アップロードしたアイコン画像は、あなたの端末（ブラウザの localStorage）にのみ保存され、サーバーには一切送信・保存されません。端末のデータを消去すると復元できません。",
+    "【サーバーに保存されるデータ（オンライン版のみ）】ランキング集計のため、ユーザーID・ユーザーネーム・プリセットアイコンID・国コード・記録完了日時（UTC）・計測秒数・推定量（ml）・ランキング対象フラグの競技用数値データのみを保存します。ログイン用のメールアドレスとパスワードは認証基盤（Supabase Auth）で管理され、公開されることはありません。",
+    "ランキングで他のユーザーに公開されるのは、ユーザーネーム・国・プリセットアイコン・ランキング対象の記録日時と推定量のみです。",
+    "マイページの「全データを削除して退会する」から、いつでもアカウントとすべての記録（端末内・サーバー上の両方）を完全に削除できます。",
   ],
   en: [
-    "Your email address, date of birth and other personal data are used only for authentication and statistics. Private records such as your Sauce Tags are never shown to other users.",
-    "Rankings only show your username, country, icon, and the time and estimated volume of ranked records.",
-    "You can permanently delete your account and all records at any time from \"Delete all data\" on My Page.",
+    "Device-only data: your Sauce Tags, date of birth, stopwatch start times, ranking-exclusion reasons and any uploaded icon image are stored only on your device (browser localStorage) and are never sent to or stored on any server. Clearing your device data removes them permanently.",
+    "Server data (online version only): to compute rankings we store competition data only — user ID, username, preset icon ID, country code, completion time (UTC), measured seconds, estimated volume (ml) and the ranked flag. Your login email and password are handled by the authentication provider (Supabase Auth) and are never shown to anyone.",
+    "Rankings only show other users your username, country, preset icon, and the time and estimated volume of ranked records.",
+    "You can permanently delete your account and all records (on this device and on the server) at any time from \"Delete all data\" on My Page.",
   ],
 };
 
@@ -112,6 +117,12 @@ export function PrivacyContent() {
   const { lang } = useI18n();
   return (
     <div className="space-y-2 text-sm leading-relaxed text-ink-2">
+      {/* The tag notice is always shown in both languages */}
+      <p className="rounded-xl bg-emerald-500/10 px-3 py-2.5 text-emerald-100 ring-1 ring-emerald-500/25">
+        {TAG_PRIVACY_NOTE[lang]}
+        <br />
+        <span className="text-xs opacity-80">{TAG_PRIVACY_NOTE[lang === "ja" ? "en" : "ja"]}</span>
+      </p>
       {PRIVACY[lang].map((p) => (
         <p key={p}>{p}</p>
       ))}

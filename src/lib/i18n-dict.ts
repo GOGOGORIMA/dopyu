@@ -101,6 +101,15 @@ const ERROR_EN: [RegExp | string, string][] = [
   ["計測データに不整合があるため保存できません（不正なデータの可能性があります）。リセットしてやり直してください", "The timer data is inconsistent (possible tampering) and was not saved. Reset and try again"],
   ["計測時間が長すぎます。リセットしてやり直してください", "The session is too long. Reset and try again"],
   ["記録の削除に失敗しました", "Could not delete the record"],
+  ["記録を読み込めませんでした", "Could not load your records"],
+  ["URLやドメイン（http, .com など）はユーザーネームに使えません", "Usernames cannot contain URLs or domains (http, .com, etc.)"],
+  ["メールアドレスはユーザーネームに使えません", "Usernames cannot contain an email address"],
+  ["電話番号のような数字（8桁以上）はユーザーネームに使えません", "Usernames cannot contain phone-number-like digits (8 or more)"],
+  ["使用できない言葉が含まれています。別のユーザーネームにしてください", "This username contains a word that is not allowed. Please choose another"],
+  [
+    "この端末で初めてログインするため、生年月日を入力してください（生年月日は端末内にのみ保存されます）",
+    "First login on this device: please enter your date of birth (it is stored only on this device)",
+  ],
   ["記録の同期に失敗しました", "Could not sync the record"],
   ["保存に失敗しました", "Could not save"],
   ["削除に失敗しました", "Could not delete"],
@@ -125,3 +134,9 @@ export function translateMessage(message: string, lang: Lang): string {
 export function translateFieldErrors(errors: Record<string, string>, lang: Lang): Record<string, string> {
   return Object.fromEntries(Object.entries(errors).map(([k, v]) => [k, translateMessage(v, lang)]));
 }
+
+/** Device-only notice for okazu tags. Always shown in both languages (current language first). */
+export const TAG_PRIVACY_NOTE = {
+  ja: "※入力したオカズタグはあなたの端末内にのみ保存され、サーバーには一切送信されません。",
+  en: "※Your Sauce Tags are stored only on this device and are never sent to any server.",
+} as const;

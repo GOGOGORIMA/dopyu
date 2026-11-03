@@ -1,6 +1,6 @@
 "use client";
 
-import { KeyRound, LoaderCircle, Mail, Sparkles } from "lucide-react";
+import { Cake, KeyRound, LoaderCircle, Mail, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
@@ -22,6 +22,8 @@ export function LoginForm() {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  // Supabase accounts: the birth date lives only on the device, so a new device asks for it once
+  const [needsBirthDate, setNeedsBirthDate] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -30,11 +32,12 @@ export function LoginForm() {
     setError(null);
     setFieldErrors({});
     try {
-      await loginUser({ email: form.get("email"), password: form.get("password") });
+      await loginUser({ email: form.get("email"), password: form.get("password"), birthDate: form.get("birthDate") ?? "" });
       router.replace(safeNextPath());
     } catch (err) {
       setError(err instanceof Error ? err.message : "ログインに失敗しました");
       setFieldErrors(err instanceof FormError ? err.fieldErrors : {});
+      if (err instanceof FormError && err.fieldErrors.birthDate) setNeedsBirthDate(true);
       setPending(false);
     }
   }
@@ -85,6 +88,26 @@ export function LoginForm() {
           className={inputClass}
         />
       </Field>
+
+      {needsBirthDate && (
+        <Field
+          label={t("生年月日", "Date of birth")}
+          htmlFor="birthDate"
+          error={shownErrors.birthDate}
+          hint={t("推定量の計算に使います。サーバーには送信されず、この端末にのみ保存されます", "Used to estimate volume. Stored only on this device, never sent to the server")}
+          icon={<Cake className="size-4" aria-hidden />}
+        >
+          <input
+            id="birthDate"
+            name="birthDate"
+            type="date"
+            required
+            max={new Date().toISOString().slice(0, 10)}
+            aria-invalid={fieldErrors.birthDate ? true : undefined}
+            className={inputClass}
+          />
+        </Field>
+      )}
 
       {error && (
         <p role="alert" className="rounded-xl bg-red-500/10 px-3.5 py-2.5 text-sm text-red-300">

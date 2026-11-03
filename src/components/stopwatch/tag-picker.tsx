@@ -1,9 +1,10 @@
 "use client";
 
-import { Check, Plus, Tag, X } from "lucide-react";
+import { Check, Plus, ShieldCheck, Tag, X } from "lucide-react";
 import { useId, useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
 import { useI18n } from "@/lib/i18n";
+import { TAG_PRIVACY_NOTE } from "@/lib/i18n-dict";
 import { MAX_TAG_LENGTH, MAX_TAGS_PER_ENTRY, normalizeTagName } from "@/lib/tags";
 
 export type TagSuggestion = { name: string; count: number };
@@ -27,7 +28,7 @@ export function TagPicker({
   onDraftChange: (value: string) => void;
 }) {
   const inputId = useId();
-  const { t } = useI18n();
+  const { lang, t } = useI18n();
   const [showAll, setShowAll] = useState(false);
   const full = selected.length >= MAX_TAGS_PER_ENTRY;
 
@@ -93,6 +94,15 @@ export function TagPicker({
           {t("追加", "Add")}
         </button>
       </div>
+
+      <p className="flex gap-1.5 rounded-lg bg-emerald-500/10 px-2.5 py-2 text-[11px] leading-relaxed text-emerald-200/90 ring-1 ring-emerald-500/20">
+        <ShieldCheck className="mt-px size-3.5 shrink-0 text-emerald-300" aria-hidden />
+        <span>
+          {TAG_PRIVACY_NOTE[lang]}
+          <br />
+          <span className="opacity-75">{TAG_PRIVACY_NOTE[lang === "ja" ? "en" : "ja"]}</span>
+        </span>
+      </p>
 
       {selected.length > 0 && (
         <ul aria-label={t("選択中のタグ", "Selected tags")} className="flex flex-wrap gap-2">

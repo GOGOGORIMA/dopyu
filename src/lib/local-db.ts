@@ -15,7 +15,7 @@ import {
   startRemoteRankingSync,
 } from "./supabase";
 import { normalizeTagList } from "./tags";
-import { createEntrySchema, loginSchema, registerSchema, toFieldErrors } from "./validation";
+import { birthDateSchema, createEntrySchema, loginSchema, registerSchema, toFieldErrors } from "./validation";
 import { calculateAge, estimateVolumeMl, estimateVolumeMlByAge } from "./volume";
 import { EXCLUSION_LABEL, judgeRanking, type RankingExclusionReason } from "./ranking-rules";
 import { APP_TIME_ZONE } from "./time";
@@ -23,8 +23,14 @@ import { APP_TIME_ZONE } from "./time";
 /**
  * Browser-only data store (GitHub Pages has no server).
  * Users, the session and entries all live in this browser's localStorage.
- * Nothing is sent anywhere; each browser is its own isolated "database".
+ * Without Supabase nothing is sent anywhere; each browser is its own isolated "database".
+ *
+ * With Supabase (hybrid mode) only competition data is synced (see src/lib/server-payload.ts).
+ * Okazu tags, start times, exclusion reasons, birth date and uploaded icons stay here only.
  */
+
+/** Shown when a Supabase account logs in on a device that does not know its (device-only) birth date. */
+export const BIRTH_DATE_REQUIRED_MESSAGE = "この端末で初めてログインするため、生年月日を入力してください（生年月日は端末内にのみ保存されます）";
 
 const USERS_KEY = "dopyu:v1:users";
 const SESSION_KEY = "dopyu:v1:session";
@@ -43,7 +49,7 @@ export type LocalUser = {
   createdAt: string;
   /** "preset:<id>", a 128x128 data URL, or null (default icon). See src/lib/avatar.ts */
   avatar?: string | null;
-  /** true = account lives in Supabase (this record is a local cache of it) */
+  /** true = account lives in Supabase (this record is a local cache of it; birthDate is device-only) */
   remote?: boolean;
 };
 
@@ -202,13 +208,21 @@ export async function registerUser(
         password: input.password,
         username: input.username,
         countryCode: input.countryCode,
-        birthDate: input.birthDate.toISOString().slice(0, 10),
         avatar: isValidAvatar(avatar) ? avatar : null,
       });
     } catch (err) {
       throw new FormError(err instanceof Error ? err.message : "登録に失敗しました");
     }
-    const user: LocalUser = { ...remote, passwordHash: "", salt: "", remote: true };
+    const user: LocalUser = {
+      ...remote,
+      // Kept on this device only (an uploaded image is not shared either)
+      avatar: isValidAvatar(avatar) ? avatar : null,
+      birthDate: input.birthDate.toISOString().slice(0, 10),
+      createdAt: new Date().toISOString(),
+      passwordHash: "",
+      salt: "",
+      remote: true,
+    };
     writeJson(USERS_KEY, [...users.filter((u) => u.id !== user.id), user]);
     writeJson(SESSION_KEY, user.id);
     emit();
@@ -237,17 +251,49 @@ export async function loginUser(raw: Record<string, unknown>): Promise<LocalUser
   const parsed = loginSchema.safeParse(raw);
   if (!parsed.success) throw new FormError("入力内容を確認してください", toFieldErrors(parsed.error));
   if (isSupabaseEnabled) {
+    // Birth date is device-only: validate it up front when the form sends one
+    let birthDate: string | undefined;
+    if (typeof raw.birthDate === "string" && raw.birthDate !== "") {
+      const birth = birthDateSchema.safeParse(raw.birthDate);
+      if (!birth.success) throw new FormError("入力内容を確認してください", { birthDate: birth.error.issues[0].message });
+      birthDate = birth.data.toISOString().slice(0, 10);
+    }
     let remote;
     try {
       remote = await remoteSignIn(parsed.data.email, parsed.data.password);
     } catch (err) {
       throw new FormError(err instanceof Error ? err.message : "ログインに失敗しました");
     }
-    const cached: LocalUser = { ...remote.profile, passwordHash: "", salt: "", remote: true };
+    const previous = listUsers().find((u) => u.id === remote.profile.id);
+    birthDate ??= previous?.birthDate;
+    if (!birthDate) {
+      await remoteSignOut().catch(reportSyncError);
+      throw new FormError(BIRTH_DATE_REQUIRED_MESSAGE, { birthDate: BIRTH_DATE_REQUIRED_MESSAGE });
+    }
+    const cached: LocalUser = {
+      ...remote.profile,
+      // An uploaded image chosen on this device stays here; the server only knows preset icons
+      avatar: remote.profile.avatar ?? (previous?.avatar?.startsWith("data:") ? previous.avatar : null),
+      birthDate,
+      createdAt: previous?.createdAt ?? new Date().toISOString(),
+      passwordHash: "",
+      salt: "",
+      remote: true,
+    };
     writeJson(USERS_KEY, [...listUsers().filter((u) => u.id !== cached.id), cached]);
+    // Server rows carry the competition data; device-only fields (tags etc.) are kept from this browser
+    const local = new Map(listEntries(cached.id).map((e) => [e.id, e]));
     writeJson(
       entriesKey(cached.id),
-      remote.entries.map((e) => ({ ...e, rankExclusion: e.rankExclusion as LocalEntry["rankExclusion"] })),
+      remote.entries.map((e): LocalEntry => {
+        const mine = local.get(e.id);
+        return {
+          ...e,
+          startTime: mine?.startTime ?? new Date(new Date(e.completedAt).getTime() - e.durationSeconds * 1000).toISOString(),
+          rankExclusion: e.isRanked ? null : (mine?.rankExclusion ?? null),
+          tags: mine?.tags ?? [],
+        };
+      }),
     );
     writeJson(SESSION_KEY, cached.id);
     emit();

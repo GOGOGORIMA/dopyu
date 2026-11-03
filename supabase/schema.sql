@@ -1,15 +1,16 @@
 -- =============================================================================
 -- DOPYU: Supabase schema + Row Level Security
--- Paste this whole file into Supabase Dashboard > SQL Editor and run it once.
+-- Paste this whole file into Supabase Dashboard > SQL Editor and run it (safe to re-run;
+-- it also migrates databases created with the earlier schema).
 --
--- Data split (privacy by table):
---   PUBLIC (anyone can read, owner writes)
---     profiles        username, country, icon
---     entries         record time, estimated volume, is_ranked   <- used for rankings
---   PRIVATE (owner only, read and write)
---     private_profiles  birth date
---     entry_details     start time, duration, okazu tags
+-- Privacy by design: the server stores COMPETITION DATA ONLY.
+--   profiles  user ID, username, preset icon ID, country code
+--   entries   user ID, completion time (UTC), measured seconds, estimated volume (ml), is_ranked
+-- Never stored on the server (kept in the user's browser localStorage only):
+--   okazu tags (Sauce), birth date, stopwatch start time, ranking-exclusion reason,
+--   uploaded icon images.
 -- E-mail and password are handled by Supabase Auth (auth.users) and never exposed.
+-- There is no column for tags at all, so a client cannot store them even by mistake.
 -- =============================================================================
 
 create extension if not exists pgcrypto;
@@ -18,46 +19,80 @@ create extension if not exists pgcrypto;
 -- Tables
 -- ---------------------------------------------------------------------------
 create table if not exists public.profiles (
-  id           uuid primary key references auth.users (id) on delete cascade,
-  username     text not null unique check (char_length(username) between 2 and 20),
-  country_code text not null default 'JP' check (country_code ~ '^[A-Z]{2}$'),
-  avatar       text check (avatar is null or avatar like 'preset:%' or (avatar like 'data:image/%' and char_length(avatar) <= 200000)),
-  created_at   timestamptz not null default now()
-);
-
-create table if not exists public.private_profiles (
-  id         uuid primary key references public.profiles (id) on delete cascade,
-  birth_date date not null
+  id            uuid primary key references auth.users (id) on delete cascade,
+  username      text not null unique,
+  country_code  text not null default 'JP',
+  avatar_preset text
 );
 
 create table if not exists public.entries (
-  id             uuid primary key default gen_random_uuid(),
-  user_id        uuid not null references public.profiles (id) on delete cascade,
-  completed_at   timestamptz not null,
-  volume_ml      real not null check (volume_ml >= 0 and volume_ml <= 10),
-  is_ranked      boolean not null default true,
-  rank_exclusion text check (rank_exclusion in ('over_120min', 'cooldown', 'daily_limit')),
-  created_at     timestamptz not null default now()
+  id               uuid primary key default gen_random_uuid(),
+  user_id          uuid not null references public.profiles (id) on delete cascade,
+  completed_at     timestamptz not null,
+  duration_seconds integer not null default 0,
+  volume_ml        real not null,
+  is_ranked        boolean not null default true
 );
+
+-- ---------------------------------------------------------------------------
+-- Migration from the earlier schema (no-ops on a fresh database)
+-- ---------------------------------------------------------------------------
+alter table public.entries add column if not exists duration_seconds integer not null default 0;
+alter table public.profiles add column if not exists avatar_preset text;
+
+do $$
+begin
+  -- Carry over measured seconds, then drop the private detail table (tags, start time)
+  if to_regclass('public.entry_details') is not null then
+    update public.entries e set duration_seconds = d.duration_seconds
+      from public.entry_details d where d.entry_id = e.id;
+    drop table public.entry_details;
+  end if;
+  -- Keep only preset icons; uploaded images are not stored on the server
+  if exists (select 1 from information_schema.columns
+             where table_schema = 'public' and table_name = 'profiles' and column_name = 'avatar') then
+    update public.profiles set avatar_preset = substring(avatar from '^preset:([a-z0-9_-]{1,32})$')
+      where avatar_preset is null;
+    alter table public.profiles drop column avatar;
+  end if;
+end $$;
+
+drop table if exists public.private_profiles;                -- birth date (device-only now)
+alter table public.profiles drop column if exists created_at;
+alter table public.entries  drop column if exists rank_exclusion;
+alter table public.entries  drop column if exists created_at;
+
+-- ---------------------------------------------------------------------------
+-- Constraints (also enforced by the app; repeated here so the API cannot bypass them)
+-- ---------------------------------------------------------------------------
+alter table public.profiles drop constraint if exists profiles_username_check;
+alter table public.profiles add constraint profiles_username_check check (
+  char_length(username) between 2 and 20
+  -- no URLs / domains, e-mail addresses or phone numbers (see src/lib/username-filter.ts)
+  and username !~* '(https?|www\.|\.(com|net|org|info|biz|jp|co|io|me|ai|app|dev|xyz|tv|ly|gg)([^a-z]|$))'
+  and username !~ '@'
+  and username !~ '[0-9]{8,}'
+);
+alter table public.profiles drop constraint if exists profiles_country_code_check;
+alter table public.profiles add constraint profiles_country_code_check check (country_code ~ '^[A-Z]{2}$');
+alter table public.profiles drop constraint if exists profiles_avatar_preset_check;
+alter table public.profiles add constraint profiles_avatar_preset_check
+  check (avatar_preset is null or avatar_preset ~ '^[a-z0-9_-]{1,32}$');
+
+alter table public.entries drop constraint if exists entries_volume_ml_check;
+alter table public.entries add constraint entries_volume_ml_check check (volume_ml >= 0 and volume_ml <= 10);
+alter table public.entries drop constraint if exists entries_duration_seconds_check;
+alter table public.entries add constraint entries_duration_seconds_check
+  check (duration_seconds between 0 and 86400);
+
 create index if not exists entries_ranked_time_idx on public.entries (is_ranked, completed_at);
 create index if not exists entries_user_time_idx on public.entries (user_id, completed_at);
-
-create table if not exists public.entry_details (
-  entry_id         uuid primary key references public.entries (id) on delete cascade,
-  user_id          uuid not null references public.profiles (id) on delete cascade,
-  start_time       timestamptz not null,
-  duration_seconds integer not null check (duration_seconds >= 0),
-  tags             text[] not null default '{}'
-);
-create index if not exists entry_details_user_idx on public.entry_details (user_id);
 
 -- ---------------------------------------------------------------------------
 -- Row Level Security
 -- ---------------------------------------------------------------------------
-alter table public.profiles         enable row level security;
-alter table public.private_profiles enable row level security;
-alter table public.entries          enable row level security;
-alter table public.entry_details    enable row level security;
+alter table public.profiles enable row level security;
+alter table public.entries  enable row level security;
 
 -- profiles: public read, owner write
 drop policy if exists "profiles are public" on public.profiles;
@@ -69,11 +104,6 @@ create policy "update own profile" on public.profiles for update using (auth.uid
 drop policy if exists "delete own profile" on public.profiles;
 create policy "delete own profile" on public.profiles for delete using (auth.uid() = id);
 
--- private_profiles: owner only
-drop policy if exists "own private profile" on public.private_profiles;
-create policy "own private profile" on public.private_profiles for all
-  using (auth.uid() = id) with check (auth.uid() = id);
-
 -- entries (ranking data): public read, owner insert/delete (no updates: records are immutable)
 drop policy if exists "entries are public" on public.entries;
 create policy "entries are public" on public.entries for select using (true);
@@ -81,11 +111,6 @@ drop policy if exists "insert own entries" on public.entries;
 create policy "insert own entries" on public.entries for insert with check (auth.uid() = user_id);
 drop policy if exists "delete own entries" on public.entries;
 create policy "delete own entries" on public.entries for delete using (auth.uid() = user_id);
-
--- entry_details (okazu tags etc.): owner only
-drop policy if exists "own entry details" on public.entry_details;
-create policy "own entry details" on public.entry_details for all
-  using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 -- ---------------------------------------------------------------------------
 -- Account deletion: removes the auth user; every row above cascades.
