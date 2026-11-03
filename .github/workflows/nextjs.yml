@@ -50,6 +50,8 @@ jobs:
         run: npm run build
         env:
           PAGES_BASE_PATH: ${{ steps.pages.outputs.base_path }}
+          # Absolute URL for og:image / twitter:image (e.g. https://<user>.github.io/<repo>)
+          NEXT_PUBLIC_SITE_URL: ${{ steps.pages.outputs.base_url }}
           NEXT_TELEMETRY_DISABLED: "1"
 
       - name: Add .nojekyll

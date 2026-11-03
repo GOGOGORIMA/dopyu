@@ -8,7 +8,8 @@
     "preview": "npx --yes serve@14 out -l 3000",
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
-    "test": "tsx --test \"src/**/*.test.ts\""
+    "test": "tsx --test \"src/**/*.test.ts\"",
+    "og:generate": "node scripts/generate-og-images.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",
@@ -28,6 +29,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.4.3",
+    "sharp": "^0.35.5",
     "tailwindcss": "^4",
     "tsx": "^4.23.15",
     "typescript": "^5"

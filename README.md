@@ -102,6 +102,19 @@ mkdir -p /tmp/site && cp -r out /tmp/site/dopyu && python3 -m http.server 8000 -
 - `_next` フォルダが Jekyll に無視されないよう、ビルド後に `out/.nojekyll` を作成しています。
 - リポジトリの **Settings → Pages → Source** を「GitHub Actions」にしておく必要があります。
 
+### OGP / X（Twitter）カード
+
+- `public/ogp.png`（1200×630 PNG、`summary_large_image` 用）と `public/icon.png`（512×512）をコミットしています。X は SVG の OGP 画像に対応していないため PNG です。
+- 画像は `scripts/generate-og-images.mjs`（SVG → sharp で PNG 化）で再生成できます。フォントは再生成時だけ必要なので依存関係には入れていません。
+
+```bash
+npm install --no-save @expo-google-fonts/orbitron @expo-google-fonts/noto-sans-jp @expo-google-fonts/share-tech-mono
+npm run og:generate
+```
+
+- `og:image` などは絶対 URL が必要なため、`metadataBase` を次の順で決めています: `NEXT_PUBLIC_SITE_URL` → GitHub Actions の `GITHUB_REPOSITORY` → `git remote get-url origin` から算出した `https://<owner>.github.io/<repo>`。ワークフローでは `actions/configure-pages` の `base_url` を `NEXT_PUBLIC_SITE_URL` として渡しています（独自ドメインにも追従）。
+- 確認: X の Card Validator はプレビュー機能が廃止されているため、X の投稿画面に URL を貼るか、`out/index.html` の `<meta property="og:image">` を見てください。
+
 ## 構成
 
 ```
