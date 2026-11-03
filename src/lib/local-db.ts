@@ -4,9 +4,11 @@ import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { isValidAvatar, sanitizeAvatar } from "./avatar";
 import { getCountryName } from "./countries";
 import {
+  type RemoteEntry,
   isSupabaseEnabled,
   remoteDeleteAccount,
   remoteDeleteEntry,
+  remoteFetchOwnData,
   remoteInsertEntry,
   remoteSaveBirthDate,
   remoteSignIn,
@@ -68,6 +70,8 @@ export type LocalEntry = {
   /** Why it is not ranked (null when ranked) */
   rankExclusion: RankingExclusionReason | null;
   tags: string[];
+  /** Supabase mode: saved here but not yet confirmed by the server (retried on the next sync) */
+  pendingSync?: boolean;
 };
 
 export type Profile = {
@@ -288,20 +292,8 @@ export async function loginUser(raw: Record<string, unknown>): Promise<LocalUser
       remote: true,
     };
     writeJson(USERS_KEY, [...listUsers().filter((u) => u.id !== cached.id), cached]);
-    // Server rows carry the competition data; device-only fields (tags etc.) are kept from this browser
-    const local = new Map(listEntries(cached.id).map((e) => [e.id, e]));
-    writeJson(
-      entriesKey(cached.id),
-      remote.entries.map((e): LocalEntry => {
-        const mine = local.get(e.id);
-        return {
-          ...e,
-          startTime: mine?.startTime ?? new Date(new Date(e.completedAt).getTime() - e.durationSeconds * 1000).toISOString(),
-          rankExclusion: e.isRanked ? null : (mine?.rankExclusion ?? null),
-          tags: mine?.tags ?? [],
-        };
-      }),
-    );
+    // Server records carry the competition data; device-only fields (tags etc.) are kept from this browser
+    writeJson(entriesKey(cached.id), mergeServerRecords(cached.id, remote.entries));
     writeJson(SESSION_KEY, cached.id);
     emit();
     return cached;
@@ -359,7 +351,110 @@ export function listEntries(userId: string): LocalEntry[] {
     isRanked: e.isRanked ?? e.isRankable ?? true,
     rankExclusion: e.rankExclusion ?? null,
     tags: Array.isArray(e.tags) ? e.tags : [],
+    ...(e.pendingSync ? { pendingSync: true } : {}),
   }));
+}
+
+/**
+ * Server records are the source of truth for the competition fields (time, seconds, volume_ml,
+ * isRanked); device-only fields (tags, start time, exclusion reason) are kept from this browser.
+ * Local records the server has not confirmed yet (pendingSync) are kept so they can be retried.
+ */
+function mergeServerRecords(userId: string, server: RemoteEntry[]): LocalEntry[] {
+  const local = listEntries(userId);
+  const byId = new Map(local.map((e) => [e.id, e]));
+  const serverIds = new Set(server.map((e) => e.id));
+  const merged = server.map((e): LocalEntry => {
+    const mine = byId.get(e.id);
+    return {
+      id: e.id,
+      completedAt: e.completedAt,
+      durationSeconds: e.durationSeconds,
+      volumeMl: e.volumeMl,
+      isRanked: e.isRanked,
+      startTime: mine?.startTime ?? new Date(new Date(e.completedAt).getTime() - e.durationSeconds * 1000).toISOString(),
+      rankExclusion: e.isRanked ? null : (mine?.rankExclusion ?? null),
+      tags: mine?.tags ?? [],
+    };
+  });
+  const pending = local.filter((e) => e.pendingSync && !serverIds.has(e.id));
+  return [...merged, ...pending].sort((a, b) => a.completedAt.localeCompare(b.completedAt));
+}
+
+/** Stores the server-confirmed volume for a record (it can differ if the device's birth date was stale). */
+function confirmSynced(userId: string, entryId: string, volumeMl: number | null) {
+  const entries = listEntries(userId);
+  const target = entries.find((e) => e.id === entryId);
+  if (!target) return;
+  writeJson(
+    entriesKey(userId),
+    entries.map((e) => {
+      if (e.id !== entryId) return e;
+      const { pendingSync: _pending, ...rest } = e;
+      void _pending;
+      return volumeMl === null ? rest : { ...rest, volumeMl };
+    }),
+  );
+  emit();
+}
+
+async function pushEntry(userId: string, entry: LocalEntry) {
+  const volumeMl = await remoteInsertEntry(userId, entry);
+  confirmSynced(userId, entry.id, volumeMl);
+}
+
+let syncing: Promise<void> | null = null;
+
+/**
+ * Supabase mode: pulls the logged-in user's profile, birth date and records from the server
+ * (so totals match on every device) and retries records that were not uploaded yet.
+ */
+export function syncAccountFromServer(): Promise<void> {
+  const user = getCurrentUser();
+  if (!user?.remote || !isSupabaseEnabled) return Promise.resolve();
+  syncing ??= (async () => {
+    try {
+      for (const entry of listEntries(user.id).filter((e) => e.pendingSync)) {
+        await pushEntry(user.id, entry).catch(reportSyncError);
+      }
+      const data = await remoteFetchOwnData(user.id);
+      if (!data) return;
+      writeJson(
+        USERS_KEY,
+        listUsers().map((u) =>
+          u.id === user.id
+            ? {
+                ...u,
+                username: data.profile.username,
+                countryCode: data.profile.countryCode,
+                avatar: data.profile.avatar,
+                birthDate: data.profile.birthDate ?? u.birthDate,
+              }
+            : u,
+        ),
+      );
+      writeJson(entriesKey(user.id), mergeServerRecords(user.id, data.entries));
+      emit();
+    } catch (err) {
+      reportSyncError(err);
+    } finally {
+      syncing = null;
+    }
+  })();
+  return syncing;
+}
+
+/** Keeps the logged-in Supabase account in sync: on mount and whenever the tab becomes visible again. */
+export function useAccountSync() {
+  useEffect(() => {
+    if (!isSupabaseEnabled) return;
+    void syncAccountFromServer();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void syncAccountFromServer();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
 }
 
 function requireUser(): LocalUser {
@@ -407,9 +502,10 @@ export function createEntry(raw: {
     rankExclusion: decision.reason,
     tags: input.tags,
   };
-  writeJson(entriesKey(user.id), [...history, entry]);
+  writeJson(entriesKey(user.id), [...history, user.remote ? { ...entry, pendingSync: true } : entry]);
   emit();
-  if (user.remote) remoteInsertEntry(user.id, entry).catch(reportSyncError);
+  // The server confirms volume_ml (computed from the stored birth date) and that value is kept
+  if (user.remote) pushEntry(user.id, entry).catch(reportSyncError);
   return { entry, exclusionLabel: decision.reason ? EXCLUSION_LABEL[decision.reason] : null };
 }
 

@@ -27,6 +27,9 @@ const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 export const isSupabaseEnabled = Boolean(url && anonKey);
 
+/** Competition records (see supabase/schema.sql). */
+const RECORDS_TABLE = "records";
+
 let client: SupabaseClient | null = null;
 export function getSupabase(): SupabaseClient | null {
   if (!isSupabaseEnabled || typeof window === "undefined") return null;
@@ -92,23 +95,20 @@ export async function remoteSignUp(input: {
   };
 }
 
-/** Sign in and download the user's profile and competition records. */
-export async function remoteSignIn(email: string, password: string): Promise<{ profile: RemoteProfile; entries: RemoteEntry[] }> {
-  const sb = getSupabase()!;
-  const { data, error } = await sb.auth.signInWithPassword({ email, password });
-  if (error || !data.user) throw new Error("メールアドレスまたはパスワードが正しくありません");
-  const id = data.user.id;
-  const [prof, priv, ents] = await Promise.all([
+export type RemoteAccountData = { profile: RemoteProfile; entries: RemoteEntry[] };
+
+/** Reads the user's own profile, owner-only birth date and every record (the source of truth for totals). */
+async function fetchOwnData(sb: SupabaseClient, id: string, email: string): Promise<RemoteAccountData> {
+  const [prof, priv, recs] = await Promise.all([
     sb.from("profiles").select(SERVER_PROFILE_COLUMNS.join(", ")).eq("id", id).single<ServerProfileRow>(),
     sb
       .from("private_profiles")
       .select(SERVER_PRIVATE_PROFILE_COLUMNS.join(", "))
       .eq("id", id)
       .maybeSingle<{ id: string; birth_date: string }>(),
-    sb.from("entries").select(SERVER_ENTRY_COLUMNS.join(", ")).eq("user_id", id).returns<ServerEntryRow[]>(),
+    fetchAll<ServerEntryRow>(RECORDS_TABLE, SERVER_ENTRY_COLUMNS.join(", "), false, id),
   ]);
   fail(prof.error, "プロフィールを読み込めませんでした");
-  fail(ents.error, "記録を読み込めませんでした");
   return {
     profile: {
       id,
@@ -118,7 +118,7 @@ export async function remoteSignIn(email: string, password: string): Promise<{ p
       avatar: fromServerAvatar(prof.data!.avatar_preset),
       birthDate: priv.data?.birth_date ?? null,
     },
-    entries: (ents.data ?? []).map((e) => ({
+    entries: recs.map((e) => ({
       id: e.id,
       completedAt: e.completed_at,
       durationSeconds: e.duration_seconds,
@@ -126,6 +126,31 @@ export async function remoteSignIn(email: string, password: string): Promise<{ p
       isRanked: e.is_ranked,
     })),
   };
+}
+
+/** Sign in and download the user's profile and competition records. */
+export async function remoteSignIn(email: string, password: string): Promise<RemoteAccountData> {
+  const sb = getSupabase()!;
+  const { data, error } = await sb.auth.signInWithPassword({ email, password });
+  if (error || !data.user) throw new Error("メールアドレスまたはパスワードが正しくありません");
+  try {
+    return await fetchOwnData(sb, data.user.id, email);
+  } catch {
+    throw new Error("記録を読み込めませんでした");
+  }
+}
+
+/**
+ * Re-downloads the logged-in user's data (another device may have added or deleted records).
+ * Returns null when there is no Supabase session for `userId`.
+ */
+export async function remoteFetchOwnData(userId: string): Promise<RemoteAccountData | null> {
+  const sb = getSupabase();
+  if (!sb) return null;
+  const { data } = await sb.auth.getSession();
+  const user = data.session?.user;
+  if (!user || user.id !== userId) return null;
+  return fetchOwnData(sb, user.id, user.email ?? "");
 }
 
 /** Stores (or replaces) the owner-only birth date. */
@@ -136,21 +161,26 @@ export async function remoteSaveBirthDate(userId: string, birthDate: string) {
   fail(error, "生年月日の保存に失敗しました");
 }
 
-/** Sends the competition fields of a record. Tags and other private fields are dropped by toServerEntry. */
+/**
+ * Sends the competition fields of a record (tags and other private fields are dropped by toServerEntry).
+ * Resolves to the server-confirmed volume_ml.
+ */
 export async function remoteInsertEntry(
   userId: string,
   e: { id: string; completedAt: string; durationSeconds: number; volumeMl: number; isRanked: boolean },
-) {
+): Promise<number | null> {
   const sb = getSupabase();
-  if (!sb) return;
-  const { error } = await sb.from("entries").insert(toServerEntry(userId, e));
+  if (!sb) return null;
+  // The server fixes volume_ml from the stored birth date (trigger in schema.sql) and returns it
+  const { data, error } = await sb.from(RECORDS_TABLE).insert(toServerEntry(userId, e)).select("volume_ml").single<{ volume_ml: number }>();
   fail(error, "記録の同期に失敗しました");
+  return data?.volume_ml ?? null;
 }
 
 export async function remoteDeleteEntry(entryId: string) {
   const sb = getSupabase();
   if (!sb) return;
-  const { error } = await sb.from("entries").delete().eq("id", entryId);
+  const { error } = await sb.from(RECORDS_TABLE).delete().eq("id", entryId);
   fail(error, "記録の削除に失敗しました");
 }
 
@@ -195,13 +225,15 @@ export function getRemoteParticipants(): RemoteParticipant[] | null {
   return participants;
 }
 
-/** Reads every row (PostgREST returns at most 1000 rows per request). */
-async function fetchAll<T>(table: string, columns: string, rankedOnly = false): Promise<T[]> {
+/** Reads every row (PostgREST returns at most 1000 rows per request), optionally for one user only. */
+async function fetchAll<T>(table: string, columns: string, rankedOnly = false, userId?: string): Promise<T[]> {
   const sb = getSupabase()!;
   const rows: T[] = [];
   for (let from = 0; ; from += 1000) {
-    const base = sb.from(table).select(columns);
-    const { data, error } = await (rankedOnly ? base.eq("is_ranked", true) : base).range(from, from + 999);
+    let query = sb.from(table).select(columns);
+    if (rankedOnly) query = query.eq("is_ranked", true);
+    if (userId) query = query.eq("user_id", userId);
+    const { data, error } = await query.order("id").range(from, from + 999);
     if (error) throw error;
     rows.push(...((data ?? []) as T[]));
     if (!data || data.length < 1000) return rows;
@@ -213,7 +245,7 @@ async function refresh() {
   type E = { user_id: string; completed_at: string; volume_ml: number };
   const [profiles, entries] = await Promise.all([
     fetchAll<P>("profiles", "id, username, country_code, avatar_preset"),
-    fetchAll<E>("entries", "user_id, completed_at, volume_ml", true),
+    fetchAll<E>(RECORDS_TABLE, "user_id, completed_at, volume_ml", true),
   ]);
   const events = new Map<string, { t: number; v: number }[]>();
   for (const e of entries) {
@@ -251,7 +283,7 @@ export function startRemoteRankingSync(onChange: () => void): () => void {
       timer = setTimeout(() => refresh().catch(() => {}), 1000);
     };
     sb.channel("dopyu-ranking")
-      .on("postgres_changes", { event: "*", schema: "public", table: "entries" }, debounced)
+      .on("postgres_changes", { event: "*", schema: "public", table: RECORDS_TABLE }, debounced)
       .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, debounced)
       .subscribe();
   }

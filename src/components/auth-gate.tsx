@@ -4,18 +4,20 @@ import { LoaderCircle } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 import { useI18n } from "@/lib/i18n";
-import { useCurrentUser } from "@/lib/local-db";
+import { useAccountSync, useCurrentUser } from "@/lib/local-db";
 
 /**
  * Client-side route guard (a static site has no server/proxy).
  * - "user": shows children only when logged in, otherwise goes to /login
  * - "guest": sends logged-in users from /login and /register to home
+ * With Supabase it also re-syncs the account (birth date, records / volume_ml) from the server.
  */
 export function AuthGate({ mode, children }: { mode: "user" | "guest"; children: ReactNode }) {
   const user = useCurrentUser();
   const router = useRouter();
   const pathname = usePathname();
   const { t } = useI18n();
+  useAccountSync();
   const allowed = user !== undefined && (mode === "user" ? user !== null : user === null);
 
   useEffect(() => {
