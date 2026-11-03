@@ -3,7 +3,7 @@
 ストップウォッチで記録して、年間ランキングで世界と競う記録・ランキング Web アプリです。
 **サーバー不要の静的サイト**として GitHub Pages で動きます。データはすべて、閲覧しているブラウザの `localStorage` に保存されます。
 
-公開 URL: `https://<GitHub ユーザー名>.github.io/dopyu/`
+公開 URL: `https://<GitHub ユーザー名>.github.io/dopyu/`（Cloudflare Pages ではルートドメインで配信できます）
 
 ## 主な機能
 
@@ -55,8 +55,8 @@ GitHub Pages ではサーバー処理が動かないため、API Routes・Prisma
     - 総回数：国全体の記録回数の合計
   - 指標の値が同じ場合は同順位になります。
 - **ユーザーアイコン（任意）**: 新規登録時、またはマイページの「プロフィールを編集」から設定できます。
-  - アップロードした画像は、ブラウザの Canvas で中央を正方形に切り抜き、128×128px・WebP 品質 0.7（未対応のブラウザでは JPEG）に圧縮してから保存します。1 枚あたり数 KB です。
-  - アップロードの代わりに、プリセットアイコン 12 種から選ぶこともできます。
+  - プリセットアイコン 12 種から選ぶ方式のみです。他人の顔写真（なりすまし・名誉毀損）や違法・わいせつ画像を扱わないよう、画像のアップロード機能はありません。
+  - 以前のバージョンでアップロードした画像が残っていても、未設定として扱います。
   - 未設定の場合はデフォルトのアイコンを表示します（`src/lib/avatar.ts`）。
 
 ## 開発
@@ -79,12 +79,16 @@ npm run dev
 npm run build
 ```
 
-`out/` に静的ファイルが出力されます。basePath は `/dopyu` です。
-GitHub Pages と同じ URL 構成で確認するには、`out` を `dopyu` という名前のフォルダに置いて配信し、`http://localhost:8000/dopyu/` を開きます。
+`out/` に静的ファイルが出力されます。ローカルでは basePath なし（ルート配信）なので、`npm run preview` でそのまま確認できます。
+
+GitHub Pages と同じ `/dopyu` 配下の構成で確認する場合は、次のようにします。
 
 ```bash
+GITHUB_ACTIONS=true npm run build
 mkdir -p /tmp/site && cp -r out /tmp/site/dopyu && python3 -m http.server 8000 -d /tmp/site
 ```
+
+`http://localhost:8000/dopyu/` を開きます。
 
 | コマンド | 内容 |
 | --- | --- |
@@ -94,13 +98,46 @@ mkdir -p /tmp/site && cp -r out /tmp/site/dopyu && python3 -m http.server 8000 -
 | `npm run typecheck` | 型チェック |
 | `npm test` | ユニットテスト（推定量・タイムゾーン・入力検証・ランキング集計条件） |
 
-## デプロイ（GitHub Actions → GitHub Pages）
+## デプロイ
+
+### 配信先ごとの basePath とサイト URL の自動切り替え
+
+`next.config.ts` がビルド時の環境変数から自動で決めます（ルールは `src/lib/deploy-env.ts`、テストは `src/lib/deploy-env.test.ts`）。
+
+basePath（CSS・JS・画像・リンクの接頭辞）:
+
+| 優先 | 条件 | basePath |
+| --- | --- | --- |
+| 1 | `CF_PAGES` がある（Cloudflare Pages）、または `NEXT_PUBLIC_BASE_PATH=""` | `""`（ルート配信） |
+| 2 | `GITHUB_ACTIONS=true` | `"/<リポジトリ名>"`（`GITHUB_REPOSITORY` から。`<owner>.github.io` リポジトリは `""`） |
+| 3 | それ以外（ローカルの dev / build） | `""` |
+
+`NEXT_PUBLIC_BASE_PATH` に `/app` のような値を入れた場合は、それをそのまま使います。
+
+サイト URL（`og:image`・`twitter:image`・`og:url` の絶対 URL）:
+
+1. `NEXT_PUBLIC_SITE_URL`
+2. `CF_PAGES_URL`（Cloudflare Pages が自動で設定）
+3. GitHub Pages の URL `https://<owner>.github.io/<repo>`（`GITHUB_REPOSITORY`、なければ `git remote get-url origin` から算出）
+
+決まった値は `NEXT_PUBLIC_BASE_PATH` / `NEXT_PUBLIC_SITE_URL` としてクライアントからも参照できます。パスの組み立ては `src/lib/site.ts` に一本化しています。
+
+- `withBasePath("/icon.png")`: Next.js が自動で接頭辞を付けない生の `href` / `src` に使います。
+- `absoluteUrl("/ogp.png")`: OGP など、サイト外から参照される URL に使います。
+
+### GitHub Pages（GitHub Actions）
 
 `main` へ push すると `.github/workflows/nextjs.yml` が動き、`npm ci` → `npm run build` を実行して `./out` を GitHub Pages に公開します。
 
-- basePath は `actions/configure-pages` が返すパスを `PAGES_BASE_PATH` 経由で `next.config.ts` に渡しています。
+- basePath は `GITHUB_ACTIONS` / `GITHUB_REPOSITORY` から自動で `/dopyu` になります。サイト URL には `actions/configure-pages` の `base_url` を渡しています。
 - `_next` フォルダが Jekyll に無視されないよう、ビルド後に `out/.nojekyll` を作成しています。
 - リポジトリの **Settings → Pages → Source** を「GitHub Actions」にしておく必要があります。
+
+### Cloudflare Pages
+
+- ビルドコマンドは `npm run build`、出力ディレクトリは `out` にします。Node.js のバージョンは `.node-version`（22）で指定しています。
+- `CF_PAGES` が自動で設定されるため、basePath なし（ルート配信）でビルドされます。
+- `CF_PAGES_URL` はデプロイごとの URL（`https://<hash>.<project>.pages.dev`）です。本番ドメインや独自ドメインを OGP に使う場合は、Cloudflare の環境変数に `NEXT_PUBLIC_SITE_URL`（例: `https://dopyu.pages.dev`）を設定してください。
 
 ### OGP / X（Twitter）カード
 
@@ -112,14 +149,14 @@ npm install --no-save @expo-google-fonts/orbitron @expo-google-fonts/noto-sans-j
 npm run og:generate
 ```
 
-- `og:image` などは絶対 URL が必要なため、`metadataBase` を次の順で決めています: `NEXT_PUBLIC_SITE_URL` → GitHub Actions の `GITHUB_REPOSITORY` → `git remote get-url origin` から算出した `https://<owner>.github.io/<repo>`。ワークフローでは `actions/configure-pages` の `base_url` を `NEXT_PUBLIC_SITE_URL` として渡しています（独自ドメインにも追従）。
+- `og:image` などは絶対 URL が必要なため、上記の「サイト URL」を `absoluteUrl()` で組み立てています（GitHub Pages / Cloudflare Pages のどちらでもリンク切れになりません）。
 - 確認: X の Card Validator はプレビュー機能が廃止されているため、X の投稿画面に URL を貼るか、`out/index.html` の `<meta property="og:image">` を見てください。
 
 ## 構成
 
 ```
 .github/workflows/nextjs.yml   Pages デプロイ
-next.config.ts                 output: "export" / basePath / trailingSlash / images.unoptimized
+next.config.ts                 output: "export" / basePath・サイト URL の自動判定 / trailingSlash / images.unoptimized
 src/
   app/(auth)/login, register   認証画面（ログイン済みならホームへ）
   app/(app)/                   ホーム（ストップウォッチ）・ランキング・マイページ（未ログインならログインへ）
@@ -129,6 +166,8 @@ src/
   components/mypage/           グラフ・カレンダー・最近の記録
   lib/local-db.ts              localStorage のデータ層（ユーザー・セッション・記録・タグ）
   lib/server-payload.ts        サーバーへ送る項目のホワイトリスト（タグ等は送らない）
+  lib/deploy-env.ts            basePath・サイト URL の判定（GitHub Pages / Cloudflare Pages / ローカル）
+  lib/site.ts                  withBasePath() / absoluteUrl() / 共有用 URL
   lib/username-filter.ts       ユーザーネームの NG ワード・個人情報フィルター
   lib/dummy-data.ts            ランキング用ダミーユーザーとデモ記録の生成
   lib/ranking.ts               ランキング集計
@@ -163,14 +202,17 @@ src/
 環境変数を設定しなければ、これまでどおり localStorage だけで動きます。
 設定すると、アカウントと競技用の記録を全ユーザーで共有し、ランキングは Realtime で自動更新されます。
 
-**サーバーに保存するのは競技用の数値データだけです**（個人情報保護法・GDPR の性生活データ対策）。
+**サーバーに保存するのは競技用の数値データと、本人しか読めない生年月日だけです**（個人情報保護法・GDPR の性生活データ対策）。
 
-- サーバー（Supabase）に保存するもの: ユーザー ID、ユーザーネーム、プリセットアイコン ID、国コード、記録完了日時（UTC）、計測秒数、推定量（ml）、ランキング対象フラグ。
-- 端末（localStorage）だけに保存するもの: **オカズタグ**、生年月日、計測の開始時刻、ランキング対象外の理由、アップロードしたアイコン画像。
+- サーバー（Supabase）に保存するもの:
+  - 公開: ユーザー ID、ユーザーネーム、プリセットアイコン ID、国コード、記録完了日時（UTC）、計測秒数、推定量（ml）、ランキング対象フラグ。
+  - 本人のみ（RLS）: 生年月日（年齢確認と推定量の計算に使用）。
+- 端末（localStorage）だけに保存するもの: **オカズタグ**、計測の開始時刻、ランキング対象外の理由。
 - 送信する行は `src/lib/server-payload.ts` のホワイトリストで 1 項目ずつ組み立てます。サーバーにはタグ用の列自体がありません。`src/lib/server-payload.test.ts` でタグが含まれないことを確認しています。
-- 別の端末で初めてログインしたときは、生年月日をその場で入力してもらいます。その端末ではオカズタグの履歴は空から始まります。
+- 別の端末でログインしても、生年月日はサーバーから読み込みます。オカズタグの履歴は端末ごとなので、その端末では空から始まります。
+- 生年月日をサーバーに保存していなかった旧バージョンのアカウントは、次回ログイン時に一度だけ生年月日を入力してもらい、サーバーに保存します。
 
-1. Supabase でプロジェクトを作り、SQL Editor に `supabase/schema.sql` を貼り付けて実行します（旧スキーマで作成済みの場合も、そのまま再実行すれば移行されます。`entry_details` と `private_profiles` は削除されます）。
+1. Supabase でプロジェクトを作り、SQL Editor に `supabase/schema.sql` を貼り付けて実行します（旧スキーマで作成済みの場合も、そのまま再実行すれば移行されます。オカズタグを含んでいた `entry_details` は削除されます）。
 2. ビルド時の環境変数に `NEXT_PUBLIC_SUPABASE_URL` と `NEXT_PUBLIC_SUPABASE_ANON_KEY` を設定します。
    - ローカルでは `.env.local` に書きます。
    - GitHub Pages では、リポジトリの Secrets を workflow の Build ステップの `env` で渡します。
@@ -182,6 +224,7 @@ src/
 | --- | --- | --- | --- |
 | `profiles` | ユーザーネーム・国コード・プリセットアイコン ID | 全員 | 本人 |
 | `entries` | 記録完了日時（UTC）・計測秒数・推定量・ランキング対象フラグ | 全員（ランキング用） | 本人（追加・削除のみ） |
+| `private_profiles` | 生年月日 | 本人のみ | 本人のみ |
 
 退会時は `delete_my_account()` で認証ユーザーを削除し、関連する行はすべて cascade で削除されます。
 

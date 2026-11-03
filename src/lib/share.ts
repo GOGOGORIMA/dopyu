@@ -1,3 +1,5 @@
+import { publicAppUrl } from "./site";
+
 /**
  * Converts an estimated volume (ml) into a familiar unit for sharing.
  *   < 15 ml        大さじ 約N杯分                (15 ml)
@@ -20,12 +22,9 @@ export function toFriendlyUnit(ml: number, lang: "ja" | "en" = "ja"): string {
   return `500mlペットボトル 約${(v / 500).toFixed(1)}本分`;
 }
 
-/** Public URL of the app (NEXT_PUBLIC_SITE_URL, or the current origin + base path). */
+/** Public URL of the app (see publicAppUrl in src/lib/site.ts). */
 export function getSiteUrl(): string {
-  const configured = process.env.NEXT_PUBLIC_SITE_URL;
-  if (configured) return configured;
-  if (typeof window === "undefined") return "";
-  return `${window.location.origin}${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/`;
+  return publicAppUrl();
 }
 
 export const SHARE_HASHTAGS = "#DOPYU #射精ワールドカップ";

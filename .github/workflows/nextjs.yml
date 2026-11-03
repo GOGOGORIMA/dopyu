@@ -28,7 +28,7 @@ jobs:
           node-version: "22"
           cache: npm
 
-      # basePath (e.g. "/dopyu") is passed via PAGES_BASE_PATH and read by next.config.ts.
+      # basePath ("/<repo>") is detected by next.config.ts from GITHUB_ACTIONS / GITHUB_REPOSITORY.
       # static_site_generator is intentionally not used: it tries to rewrite next.config,
       # which does not work with next.config.ts.
       - name: Setup Pages
@@ -49,7 +49,6 @@ jobs:
       - name: Build (static export)
         run: npm run build
         env:
-          PAGES_BASE_PATH: ${{ steps.pages.outputs.base_path }}
           # Absolute URL for og:image / twitter:image (e.g. https://<user>.github.io/<repo>)
           NEXT_PUBLIC_SITE_URL: ${{ steps.pages.outputs.base_url }}
           NEXT_TELEMETRY_DISABLED: "1"
