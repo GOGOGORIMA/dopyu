@@ -2,7 +2,7 @@ import { UserRound } from "lucide-react";
 import { getPreset } from "@/lib/avatar";
 import { cn } from "@/lib/cn";
 
-/** Round user icon: uploaded image, preset emoji avatar, or the default icon when not set. */
+/** Round user icon: a preset emoji avatar, or the default icon (also for any legacy non-preset value). */
 export function Avatar({
   avatar,
   name,
@@ -14,13 +14,6 @@ export function Avatar({
   className?: string;
 }) {
   const base = cn("relative inline-grid shrink-0 place-items-center overflow-hidden rounded-full ring-1 ring-line-strong", className ?? "size-8");
-
-  if (avatar?.startsWith("data:image/")) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element -- data URL, nothing to optimize
-      <img src={avatar} alt={name} className={cn(base, "object-cover")} />
-    );
-  }
 
   const preset = getPreset(avatar);
   if (preset) {

@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useSyncExternalStore } from "react";
-import { isValidAvatar } from "./avatar";
+import { isValidAvatar, sanitizeAvatar } from "./avatar";
 import { getCountryName } from "./countries";
 import {
   isSupabaseEnabled,
   remoteDeleteAccount,
   remoteDeleteEntry,
   remoteInsertEntry,
+  remoteSaveBirthDate,
   remoteSignIn,
   remoteSignOut,
   remoteSignUp,
@@ -25,12 +26,12 @@ import { APP_TIME_ZONE } from "./time";
  * Users, the session and entries all live in this browser's localStorage.
  * Without Supabase nothing is sent anywhere; each browser is its own isolated "database".
  *
- * With Supabase (hybrid mode) only competition data is synced (see src/lib/server-payload.ts).
- * Okazu tags, start times, exclusion reasons, birth date and uploaded icons stay here only.
+ * With Supabase (hybrid mode) the competition data and the (owner-only) birth date are synced
+ * (see src/lib/server-payload.ts). Okazu tags, start times and exclusion reasons stay here only.
  */
 
-/** Shown when a Supabase account logs in on a device that does not know its (device-only) birth date. */
-export const BIRTH_DATE_REQUIRED_MESSAGE = "この端末で初めてログインするため、生年月日を入力してください（生年月日は端末内にのみ保存されます）";
+/** Shown when a Supabase account has no birth date on the server yet (accounts from older versions). */
+export const BIRTH_DATE_REQUIRED_MESSAGE = "生年月日が登録されていないため、入力してください";
 
 const USERS_KEY = "dopyu:v1:users";
 const SESSION_KEY = "dopyu:v1:session";
@@ -47,9 +48,9 @@ export type LocalUser = {
   birthDate: string;
   countryCode: string;
   createdAt: string;
-  /** "preset:<id>", a 128x128 data URL, or null (default icon). See src/lib/avatar.ts */
+  /** "preset:<id>" or null (default icon). Presets only, see src/lib/avatar.ts */
   avatar?: string | null;
-  /** true = account lives in Supabase (this record is a local cache of it; birthDate is device-only) */
+  /** true = account lives in Supabase (this record is a local cache of it) */
   remote?: boolean;
 };
 
@@ -155,7 +156,8 @@ const newId = () =>
 // Users & session
 // ---------------------------------------------------------------------------
 export function listUsers(): LocalUser[] {
-  return readJson<LocalUser[]>(USERS_KEY, []);
+  // Legacy uploaded images (data URLs) are no longer allowed: they read as "not set"
+  return readJson<LocalUser[]>(USERS_KEY, []).map((u) => ({ ...u, avatar: sanitizeAvatar(u.avatar) }));
 }
 
 async function hashPassword(password: string, salt: string): Promise<string> {
@@ -208,16 +210,14 @@ export async function registerUser(
         password: input.password,
         username: input.username,
         countryCode: input.countryCode,
-        avatar: isValidAvatar(avatar) ? avatar : null,
+        birthDate: input.birthDate.toISOString().slice(0, 10),
+        avatar: sanitizeAvatar(avatar),
       });
     } catch (err) {
       throw new FormError(err instanceof Error ? err.message : "登録に失敗しました");
     }
     const user: LocalUser = {
       ...remote,
-      // Kept on this device only (an uploaded image is not shared either)
-      avatar: isValidAvatar(avatar) ? avatar : null,
-      birthDate: input.birthDate.toISOString().slice(0, 10),
       createdAt: new Date().toISOString(),
       passwordHash: "",
       salt: "",
@@ -239,7 +239,7 @@ export async function registerUser(
     birthDate: input.birthDate.toISOString().slice(0, 10),
     countryCode: input.countryCode,
     createdAt: new Date().toISOString(),
-    avatar: isValidAvatar(avatar) ? avatar : null,
+    avatar: sanitizeAvatar(avatar),
   };
   writeJson(USERS_KEY, [...users, user]);
   writeJson(SESSION_KEY, user.id);
@@ -251,7 +251,7 @@ export async function loginUser(raw: Record<string, unknown>): Promise<LocalUser
   const parsed = loginSchema.safeParse(raw);
   if (!parsed.success) throw new FormError("入力内容を確認してください", toFieldErrors(parsed.error));
   if (isSupabaseEnabled) {
-    // Birth date is device-only: validate it up front when the form sends one
+    // Only needed for accounts whose birth date is not on the server yet: validate it up front
     let birthDate: string | undefined;
     if (typeof raw.birthDate === "string" && raw.birthDate !== "") {
       const birth = birthDateSchema.safeParse(raw.birthDate);
@@ -265,15 +265,22 @@ export async function loginUser(raw: Record<string, unknown>): Promise<LocalUser
       throw new FormError(err instanceof Error ? err.message : "ログインに失敗しました");
     }
     const previous = listUsers().find((u) => u.id === remote.profile.id);
-    birthDate ??= previous?.birthDate;
+    const serverBirthDate = remote.profile.birthDate;
+    birthDate = serverBirthDate ?? birthDate ?? previous?.birthDate;
     if (!birthDate) {
       await remoteSignOut().catch(reportSyncError);
       throw new FormError(BIRTH_DATE_REQUIRED_MESSAGE, { birthDate: BIRTH_DATE_REQUIRED_MESSAGE });
     }
+    if (!serverBirthDate) {
+      // Older accounts kept it on the device only: store it on the server now
+      try {
+        await remoteSaveBirthDate(remote.profile.id, birthDate);
+      } catch (err) {
+        reportSyncError(err);
+      }
+    }
     const cached: LocalUser = {
       ...remote.profile,
-      // An uploaded image chosen on this device stays here; the server only knows preset icons
-      avatar: remote.profile.avatar ?? (previous?.avatar?.startsWith("data:") ? previous.avatar : null),
       birthDate,
       createdAt: previous?.createdAt ?? new Date().toISOString(),
       passwordHash: "",
@@ -313,7 +320,7 @@ export async function loginUser(raw: Record<string, unknown>): Promise<LocalUser
 export function updateAvatar(avatar: string | null) {
   const current = getCurrentUser();
   if (!current) throw new FormError("ログインが必要です");
-  if (avatar !== null && !isValidAvatar(avatar)) throw new FormError("アイコン画像の形式が正しくありません");
+  if (avatar !== null && !isValidAvatar(avatar)) throw new FormError("プリセットのアイコンを選んでください");
   writeJson(
     USERS_KEY,
     listUsers().map((u) => (u.id === current.id ? { ...u, avatar } : u)),

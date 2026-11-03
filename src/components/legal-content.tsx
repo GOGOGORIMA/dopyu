@@ -40,13 +40,13 @@ const TERMS: Section[] = [
     ja: [
       "3. 禁止事項",
       [
-        "ユーザーネームやアイコン、タグ等に、他者の個人情報、誹謗中傷、公序良俗に反する違法な内容を設定することを禁止します。悪質なアカウントは予告なくランキングから除外または削除する場合があります。",
+        "ユーザーネームやタグ等に、他者の個人情報、なりすまし、誹謗中傷、公序良俗に反する違法な内容を設定することを禁止します。悪質なアカウントは予告なくランキングから除外または削除する場合があります。",
       ],
     ],
     en: [
       "3. Prohibited Conduct",
       [
-        "Do not use usernames, icons or tags containing other people's personal information, harassment, or illegal or offensive content. Abusive accounts may be removed from rankings or deleted without notice.",
+        "Do not use usernames or tags containing other people's personal information, impersonation, harassment, or illegal or offensive content. Abusive accounts may be removed from rankings or deleted without notice.",
       ],
     ],
   },
@@ -74,14 +74,16 @@ const TERMS: Section[] = [
 
 const PRIVACY: Record<"ja" | "en", string[]> = {
   ja: [
-    "【端末内のみに保存されるデータ】オカズタグ、生年月日、計測の開始時刻、ランキング対象外の理由、アップロードしたアイコン画像は、あなたの端末（ブラウザの localStorage）にのみ保存され、サーバーには一切送信・保存されません。端末のデータを消去すると復元できません。",
-    "【サーバーに保存されるデータ（オンライン版のみ）】ランキング集計のため、ユーザーID・ユーザーネーム・プリセットアイコンID・国コード・記録完了日時（UTC）・計測秒数・推定量（ml）・ランキング対象フラグの競技用数値データのみを保存します。ログイン用のメールアドレスとパスワードは認証基盤（Supabase Auth）で管理され、公開されることはありません。",
+    "【端末内のみに保存されるデータ】オカズタグ、計測の開始時刻、ランキング対象外の理由は、あなたの端末（ブラウザの localStorage）にのみ保存され、サーバーには一切送信・保存されません。端末のデータを消去すると復元できません。",
+    "【サーバーに保存されるデータ（オンライン版のみ）】ランキング集計のため、ユーザーID・ユーザーネーム・プリセットアイコンID・国コード・記録完了日時（UTC）・計測秒数・推定量（ml）・ランキング対象フラグの競技用数値データを保存します。生年月日は年齢確認と推定量の計算のため、本人だけが読み書きできる領域に保存し、他のユーザーに公開されることはありません。ログイン用のメールアドレスとパスワードは認証基盤（Supabase Auth）で管理され、公開されることはありません。",
+    "アイコンは用意されたプリセットからの選択のみで、画像のアップロード機能はありません。",
     "ランキングで他のユーザーに公開されるのは、ユーザーネーム・国・プリセットアイコン・ランキング対象の記録日時と推定量のみです。",
     "マイページの「全データを削除して退会する」から、いつでもアカウントとすべての記録（端末内・サーバー上の両方）を完全に削除できます。",
   ],
   en: [
-    "Device-only data: your Sauce Tags, date of birth, stopwatch start times, ranking-exclusion reasons and any uploaded icon image are stored only on your device (browser localStorage) and are never sent to or stored on any server. Clearing your device data removes them permanently.",
-    "Server data (online version only): to compute rankings we store competition data only — user ID, username, preset icon ID, country code, completion time (UTC), measured seconds, estimated volume (ml) and the ranked flag. Your login email and password are handled by the authentication provider (Supabase Auth) and are never shown to anyone.",
+    "Device-only data: your Sauce Tags, stopwatch start times and ranking-exclusion reasons are stored only on your device (browser localStorage) and are never sent to or stored on any server. Clearing your device data removes them permanently.",
+    "Server data (online version only): to compute rankings we store competition data — user ID, username, preset icon ID, country code, completion time (UTC), measured seconds, estimated volume (ml) and the ranked flag. Your date of birth is stored in an area only you can read or write, for the age check and volume estimate, and is never shown to other users. Your login email and password are handled by the authentication provider (Supabase Auth) and are never shown to anyone.",
+    "Icons are chosen from the built-in presets only; there is no image upload.",
     "Rankings only show other users your username, country, preset icon, and the time and estimated volume of ranked records.",
     "You can permanently delete your account and all records (on this device and on the server) at any time from \"Delete all data\" on My Page.",
   ],

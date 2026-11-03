@@ -1,10 +1,12 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import {
   SERVER_ENTRY_COLUMNS,
+  SERVER_PRIVATE_PROFILE_COLUMNS,
   SERVER_PROFILE_COLUMNS,
   fromServerAvatar,
   toServerAvatar,
   toServerEntry,
+  toServerPrivateProfile,
   toServerProfile,
   type ServerEntryRow,
   type ServerProfileRow,
@@ -17,7 +19,8 @@ import {
  * Otherwise the app keeps working with localStorage only.
  *
  * Privacy: only the columns in src/lib/server-payload.ts are ever sent. Okazu tags (Sauce),
- * birth date, start time and uploaded icon images stay in localStorage on the user's device.
+ * start time and exclusion reasons stay in localStorage on the user's device. The birth date is
+ * stored in an owner-only table (never public).
  */
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -48,20 +51,23 @@ export type RemoteProfile = {
   countryCode: string;
   /** "preset:<id>" or null */
   avatar: string | null;
+  /** YYYY-MM-DD from the owner-only private_profiles table (null for accounts created before it was stored) */
+  birthDate: string | null;
 };
 
 function fail(error: { message: string } | null, fallback: string): never | void {
   if (error) throw new Error(`${fallback}（${error.message}）`);
 }
 
-/** Sign up, then create the public profile (username, country, preset icon ID only). */
+/** Sign up, then create the public profile (username, country, preset icon ID) and the owner-only birth date row. */
 export async function remoteSignUp(input: {
   email: string;
   password: string;
   username: string;
   countryCode: string;
+  birthDate: string;
   avatar: string | null;
-}): Promise<RemoteProfile> {
+}): Promise<RemoteProfile & { birthDate: string }> {
   const sb = getSupabase()!;
   const { data: taken } = await sb.from("profiles").select("id").eq("username", input.username).maybeSingle();
   if (taken) throw new Error("このユーザーネームは既に使われています");
@@ -74,7 +80,16 @@ export async function remoteSignUp(input: {
   const row = toServerProfile({ id, username: input.username, countryCode: input.countryCode, avatar: input.avatar });
   const profile = await sb.from("profiles").insert(row);
   fail(profile.error, "プロフィールの作成に失敗しました");
-  return { id, email: input.email, username: row.username!, countryCode: row.country_code!, avatar: fromServerAvatar(row.avatar_preset) };
+  const priv = await sb.from("private_profiles").insert(toServerPrivateProfile(id, input.birthDate));
+  fail(priv.error, "プロフィールの作成に失敗しました");
+  return {
+    id,
+    email: input.email,
+    username: row.username!,
+    countryCode: row.country_code!,
+    avatar: fromServerAvatar(row.avatar_preset),
+    birthDate: input.birthDate,
+  };
 }
 
 /** Sign in and download the user's profile and competition records. */
@@ -83,8 +98,13 @@ export async function remoteSignIn(email: string, password: string): Promise<{ p
   const { data, error } = await sb.auth.signInWithPassword({ email, password });
   if (error || !data.user) throw new Error("メールアドレスまたはパスワードが正しくありません");
   const id = data.user.id;
-  const [prof, ents] = await Promise.all([
+  const [prof, priv, ents] = await Promise.all([
     sb.from("profiles").select(SERVER_PROFILE_COLUMNS.join(", ")).eq("id", id).single<ServerProfileRow>(),
+    sb
+      .from("private_profiles")
+      .select(SERVER_PRIVATE_PROFILE_COLUMNS.join(", "))
+      .eq("id", id)
+      .maybeSingle<{ id: string; birth_date: string }>(),
     sb.from("entries").select(SERVER_ENTRY_COLUMNS.join(", ")).eq("user_id", id).returns<ServerEntryRow[]>(),
   ]);
   fail(prof.error, "プロフィールを読み込めませんでした");
@@ -96,6 +116,7 @@ export async function remoteSignIn(email: string, password: string): Promise<{ p
       username: prof.data!.username!,
       countryCode: prof.data!.country_code!,
       avatar: fromServerAvatar(prof.data!.avatar_preset),
+      birthDate: priv.data?.birth_date ?? null,
     },
     entries: (ents.data ?? []).map((e) => ({
       id: e.id,
@@ -105,6 +126,14 @@ export async function remoteSignIn(email: string, password: string): Promise<{ p
       isRanked: e.is_ranked,
     })),
   };
+}
+
+/** Stores (or replaces) the owner-only birth date. */
+export async function remoteSaveBirthDate(userId: string, birthDate: string) {
+  const sb = getSupabase();
+  if (!sb) return;
+  const { error } = await sb.from("private_profiles").upsert(toServerPrivateProfile(userId, birthDate));
+  fail(error, "生年月日の保存に失敗しました");
 }
 
 /** Sends the competition fields of a record. Tags and other private fields are dropped by toServerEntry. */
@@ -125,7 +154,7 @@ export async function remoteDeleteEntry(entryId: string) {
   fail(error, "記録の削除に失敗しました");
 }
 
-/** Shares the icon only when it is a built-in preset; an uploaded image is kept on this device (sent as null). */
+/** Sends the preset icon ID (null = default icon). */
 export async function remoteUpdateAvatar(userId: string, avatar: string | null) {
   const sb = getSupabase();
   if (!sb) return;

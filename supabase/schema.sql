@@ -3,12 +3,13 @@
 -- Paste this whole file into Supabase Dashboard > SQL Editor and run it (safe to re-run;
 -- it also migrates databases created with the earlier schema).
 --
--- Privacy by design: the server stores COMPETITION DATA ONLY.
---   profiles  user ID, username, preset icon ID, country code
---   entries   user ID, completion time (UTC), measured seconds, estimated volume (ml), is_ranked
+-- Privacy by design: the server stores competition data plus an owner-only birth date.
+--   profiles          PUBLIC      user ID, username, preset icon ID, country code
+--   entries           PUBLIC      user ID, completion time (UTC), measured seconds, estimated volume (ml), is_ranked
+--   private_profiles  OWNER ONLY  birth date (age check / volume estimate; never shown to anyone else)
 -- Never stored on the server (kept in the user's browser localStorage only):
---   okazu tags (Sauce), birth date, stopwatch start time, ranking-exclusion reason,
---   uploaded icon images.
+--   okazu tags (Sauce), stopwatch start time, ranking-exclusion reason.
+-- Icons are built-in preset IDs only; there is no image upload.
 -- E-mail and password are handled by Supabase Auth (auth.users) and never exposed.
 -- There is no column for tags at all, so a client cannot store them even by mistake.
 -- =============================================================================
@@ -23,6 +24,11 @@ create table if not exists public.profiles (
   username      text not null unique,
   country_code  text not null default 'JP',
   avatar_preset text
+);
+
+create table if not exists public.private_profiles (
+  id         uuid primary key references public.profiles (id) on delete cascade,
+  birth_date date not null check (birth_date > date '1900-01-01')
 );
 
 create table if not exists public.entries (
@@ -48,7 +54,7 @@ begin
       from public.entry_details d where d.entry_id = e.id;
     drop table public.entry_details;
   end if;
-  -- Keep only preset icons; uploaded images are not stored on the server
+  -- Keep only preset icons (image upload has been removed)
   if exists (select 1 from information_schema.columns
              where table_schema = 'public' and table_name = 'profiles' and column_name = 'avatar') then
     update public.profiles set avatar_preset = substring(avatar from '^preset:([a-z0-9_-]{1,32})$')
@@ -57,7 +63,6 @@ begin
   end if;
 end $$;
 
-drop table if exists public.private_profiles;                -- birth date (device-only now)
 alter table public.profiles drop column if exists created_at;
 alter table public.entries  drop column if exists rank_exclusion;
 alter table public.entries  drop column if exists created_at;
@@ -91,8 +96,9 @@ create index if not exists entries_user_time_idx on public.entries (user_id, com
 -- ---------------------------------------------------------------------------
 -- Row Level Security
 -- ---------------------------------------------------------------------------
-alter table public.profiles enable row level security;
-alter table public.entries  enable row level security;
+alter table public.profiles         enable row level security;
+alter table public.private_profiles enable row level security;
+alter table public.entries          enable row level security;
 
 -- profiles: public read, owner write
 drop policy if exists "profiles are public" on public.profiles;
@@ -103,6 +109,11 @@ drop policy if exists "update own profile" on public.profiles;
 create policy "update own profile" on public.profiles for update using (auth.uid() = id) with check (auth.uid() = id);
 drop policy if exists "delete own profile" on public.profiles;
 create policy "delete own profile" on public.profiles for delete using (auth.uid() = id);
+
+-- private_profiles (birth date): owner only, read and write
+drop policy if exists "own private profile" on public.private_profiles;
+create policy "own private profile" on public.private_profiles for all
+  using (auth.uid() = id) with check (auth.uid() = id);
 
 -- entries (ranking data): public read, owner insert/delete (no updates: records are immutable)
 drop policy if exists "entries are public" on public.entries;

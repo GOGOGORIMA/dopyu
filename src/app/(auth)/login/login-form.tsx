@@ -22,7 +22,7 @@ export function LoginForm() {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  // Supabase accounts: the birth date lives only on the device, so a new device asks for it once
+  // Supabase accounts created before the birth date was stored on the server are asked for it once
   const [needsBirthDate, setNeedsBirthDate] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -94,7 +94,7 @@ export function LoginForm() {
           label={t("生年月日", "Date of birth")}
           htmlFor="birthDate"
           error={shownErrors.birthDate}
-          hint={t("推定量の計算に使います。サーバーには送信されず、この端末にのみ保存されます", "Used to estimate volume. Stored only on this device, never sent to the server")}
+          hint={t("年齢確認と推定量の計算に使います（本人以外には公開されません）", "Used for the age check and volume estimate (never shown to other users)")}
           icon={<Cake className="size-4" aria-hidden />}
         >
           <input

@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { SERVER_ENTRY_COLUMNS, SERVER_PROFILE_COLUMNS, fromServerAvatar, toServerEntry, toServerProfile } from "./server-payload";
+import {
+  SERVER_ENTRY_COLUMNS,
+  SERVER_PRIVATE_PROFILE_COLUMNS,
+  SERVER_PROFILE_COLUMNS,
+  fromServerAvatar,
+  toServerEntry,
+  toServerPrivateProfile,
+  toServerProfile,
+} from "./server-payload";
 
 describe("server payload (privacy whitelist)", () => {
   const localEntry = {
@@ -37,6 +45,13 @@ describe("server payload (privacy whitelist)", () => {
     assert.equal(row.avatar_preset, null, "uploaded images are never sent");
     assert.ok(!JSON.stringify(row).includes("1990"));
     assert.equal(toServerProfile({ ...withImage, avatar: "preset:cat" }).avatar_preset, "cat");
+  });
+
+  it("birth date goes only to the owner-only row, with a strict format", () => {
+    const row = toServerPrivateProfile("u1", "1990-01-01");
+    assert.deepEqual(Object.keys(row).sort(), [...SERVER_PRIVATE_PROFILE_COLUMNS].sort());
+    assert.deepEqual(row, { id: "u1", birth_date: "1990-01-01" });
+    assert.throws(() => toServerPrivateProfile("u1", "1990-01-01T00:00:00Z"));
   });
 
   it("maps preset IDs back and ignores unknown ones", () => {

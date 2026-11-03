@@ -3,16 +3,18 @@ import { getPreset } from "./avatar";
 /**
  * Whitelist of what may ever leave the device (Supabase mode).
  *
- * The server only stores competition data:
- *   profiles: user ID, username, preset icon ID, country code
- *   entries:  user ID, completion time (UTC), measured seconds, estimated volume (ml), isRanked
+ * The server stores:
+ *   profiles          (public)      user ID, username, preset icon ID, country code
+ *   private_profiles  (owner only)  user ID, birth date (for the age check and volume estimate)
+ *   entries           (public)      user ID, completion time (UTC), measured seconds, estimated volume (ml), isRanked
  *
- * Everything else — okazu tags (Sauce), start time, ranking-exclusion reason, birth date,
- * uploaded icon images — stays in this browser's localStorage only.
+ * Everything else — okazu tags (Sauce), start time, ranking-exclusion reason — stays in this
+ * browser's localStorage only. Icons are preset IDs only (there is no image upload).
  * Rows are always built field by field here (never by spreading a local object), so a new
  * local field can never be sent by accident.
  */
 export const SERVER_PROFILE_COLUMNS = ["id", "username", "country_code", "avatar_preset"] as const;
+export const SERVER_PRIVATE_PROFILE_COLUMNS = ["id", "birth_date"] as const;
 export const SERVER_ENTRY_COLUMNS = ["id", "user_id", "completed_at", "duration_seconds", "volume_ml", "is_ranked"] as const;
 
 export type ServerProfileRow = Record<(typeof SERVER_PROFILE_COLUMNS)[number], string | null>;
@@ -25,7 +27,7 @@ export type ServerEntryRow = {
   is_ranked: boolean;
 };
 
-/** Only built-in preset icons are shared; uploaded images (data URLs) are never sent. */
+/** Only built-in preset icon IDs are sent; any other value becomes null. */
 export function toServerAvatar(avatar: string | null | undefined): string | null {
   return getPreset(avatar)?.id ?? null;
 }
@@ -62,4 +64,10 @@ export function toServerEntry(
     volume_ml: entry.volumeMl,
     is_ranked: entry.isRanked,
   };
+}
+
+/** Owner-only row (RLS: readable and writable by the user only). birthDate is "YYYY-MM-DD". */
+export function toServerPrivateProfile(id: string, birthDate: string): { id: string; birth_date: string } {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(birthDate)) throw new Error("生年月日の形式が正しくありません");
+  return { id, birth_date: birthDate };
 }

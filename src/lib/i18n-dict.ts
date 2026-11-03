@@ -106,10 +106,9 @@ const ERROR_EN: [RegExp | string, string][] = [
   ["メールアドレスはユーザーネームに使えません", "Usernames cannot contain an email address"],
   ["電話番号のような数字（8桁以上）はユーザーネームに使えません", "Usernames cannot contain phone-number-like digits (8 or more)"],
   ["使用できない言葉が含まれています。別のユーザーネームにしてください", "This username contains a word that is not allowed. Please choose another"],
-  [
-    "この端末で初めてログインするため、生年月日を入力してください（生年月日は端末内にのみ保存されます）",
-    "First login on this device: please enter your date of birth (it is stored only on this device)",
-  ],
+  ["生年月日が登録されていないため、入力してください", "Your date of birth is not registered yet. Please enter it"],
+  ["生年月日の保存に失敗しました", "Could not save your date of birth"],
+  ["プリセットのアイコンを選んでください", "Please pick one of the preset icons"],
   ["記録の同期に失敗しました", "Could not sync the record"],
   ["保存に失敗しました", "Could not save"],
   ["削除に失敗しました", "Could not delete"],
