@@ -1,4 +1,5 @@
 import { Lock } from "lucide-react";
+import Link from "next/link";
 import { AuthGate } from "@/components/auth-gate";
 import { Logo } from "@/components/brand/logo";
 import { LanguageToggle, T } from "@/lib/i18n";
@@ -17,19 +18,24 @@ export default function AuthLayout({ children }: LayoutProps<"/">) {
       <div className="w-full max-w-md rounded-3xl border border-line bg-surface p-6 shadow-2xl shadow-black/40 sm:p-8">
         <AuthGate mode="guest">{children}</AuthGate>
       </div>
-      <p className="mt-6 flex items-center gap-1.5 text-xs text-muted">
-        <Lock className="size-3.5" aria-hidden />
-        {isSupabaseEnabled ? (
-          <T
-            ja="オカズタグや計測時間はあなただけに表示されます。ランキングには回数と推定量のみ公開されます。"
-            en="Your sauce tags and session times stay private. Rankings only show counts and estimated volume."
-          />
-        ) : (
-          <T
-            ja="データはこのブラウザ内（localStorage）にのみ保存され、外部には送信されません。"
-            en="Your data is stored only in this browser (localStorage) and never sent anywhere."
-          />
-        )}
+      <p className="mt-6 flex max-w-md items-start gap-1.5 text-xs leading-relaxed text-muted">
+        <Lock className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+        <span>
+          {isSupabaseEnabled ? (
+            <T
+              ja="ランキングの集計に必要な記録（記録日時・計測時間・推定量）はサーバーに保存されます。オカズタグはお使いの端末内にのみ保存され、サーバーには送信されません。"
+              en="Records needed for the rankings (date and time, duration and estimated volume) are stored on our server. Sauce Tags are stored only on your device and are never sent to the server."
+            />
+          ) : (
+            <T
+              ja="現在のバージョンでは、アカウント情報と記録はお使いのブラウザ内に保存され、当サービスのサーバーには送信されません。"
+              en="In the current version, your account and records are stored in your browser and are not sent to our servers."
+            />
+          )}{" "}
+          <Link href="/legal#privacy" className="underline underline-offset-2 hover:text-ink-2">
+            <T ja="詳しくはプライバシーポリシーをご確認ください。" en="See the Privacy Policy for details." />
+          </Link>
+        </span>
       </p>
     </main>
   );

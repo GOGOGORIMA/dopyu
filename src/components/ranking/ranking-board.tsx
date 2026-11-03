@@ -9,6 +9,7 @@ import { getCurrentUser, useDb, useRemoteRankingSync } from "@/lib/local-db";
 import { computeCountryRanking, computeUserRanking, RANKING_METRICS, type PeriodInfo, type RankingMetric } from "@/lib/ranking";
 import { formatCountdown, RANKING_PERIODS, type RankingPeriodKey } from "@/lib/ranking-period";
 import { rankShareText, xShareUrl } from "@/lib/share";
+import { isSupabaseEnabled } from "@/lib/supabase";
 import type { RankingType } from "@/lib/validation";
 import { CountryRankingView } from "./country-ranking";
 import { MyRankBar } from "./my-rank-bar";
@@ -236,9 +237,14 @@ export function RankingBoard() {
           <p className="flex items-start gap-1.5 text-xs leading-relaxed text-muted">
             <Lock className="mt-px size-3.5 shrink-0" aria-hidden />
             {t(
-              "ランキングに表示されるのはアイコン・ユーザーネーム・所属国・回数・推定量のみです。タグや記録時刻は表示されません。集計対象は、計測120分以内・前回の記録から30分経過後・1日5回（UTC基準）までの記録です。デモ版のため、ランキングは組み込みのサンプルユーザーとこのブラウザ内のアカウントで構成されます。",
-              "Rankings only show icon, username, country, count and estimated volume — never your tags or times. Ranked sessions: up to 120 min, at least 30 min after the previous one, max 5 per UTC day. In this demo, rankings consist of built-in sample users and accounts in this browser.",
+              "ランキングに表示されるのはアイコン・ユーザーネーム・所属国・回数・推定量のみです。タグや記録時刻は表示されません。集計対象は、計測120分以内・前回の記録から30分経過後・1日5回（UTC基準）までの記録です。",
+              "Rankings only show icon, username, country, count and estimated volume — never your tags or times. Ranked sessions: up to 120 min, at least 30 min after the previous one, max 5 per UTC day.",
             )}
+            {!isSupabaseEnabled &&
+              t(
+                "現在のバージョンでは、ランキングは組み込みのサンプルユーザーと、このブラウザで登録されたアカウントで構成されます。",
+                " In the current version, rankings consist of built-in sample users and accounts registered in this browser.",
+              )}
           </p>
           {/* Room so the pinned bar never covers the last rows */}
           <div className="h-20" aria-hidden />

@@ -30,8 +30,22 @@ export function isCountryCode(value: unknown): value is CountryCode {
 
 const displayNames = new Map<string, Intl.DisplayNames | null>();
 
+/**
+ * Fixed names for politically sensitive regions. Browsers ship their own name data and some show
+ * e.g. "中国本土" / "China mainland" or "Hong Kong SAR China"; these neutral short names are used
+ * everywhere instead, independent of the browser.
+ */
+export const COUNTRY_NAME_OVERRIDES: Readonly<Record<string, { ja: string; en: string }>> = {
+  CN: { ja: "中国", en: "China" },
+  HK: { ja: "香港", en: "Hong Kong" },
+  MO: { ja: "マカオ", en: "Macao" },
+  TW: { ja: "台湾", en: "Taiwan" },
+};
+
 /** Country name (Japanese by default). Falls back to the code if the runtime has no name data. */
 export function getCountryName(code: string, lang: "ja" | "en" = "ja"): string {
+  const fixed = COUNTRY_NAME_OVERRIDES[code];
+  if (fixed) return fixed[lang];
   if (!displayNames.has(lang)) {
     try {
       displayNames.set(lang, new Intl.DisplayNames([lang], { type: "region", style: "short" }));

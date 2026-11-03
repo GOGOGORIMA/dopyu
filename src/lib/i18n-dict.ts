@@ -1,3 +1,4 @@
+import { getCountryName } from "./countries";
 import type { Lang } from "./i18n";
 import type { RankingPeriodKey } from "./ranking-period";
 import type { RankingExclusionReason } from "./ranking-rules";
@@ -40,21 +41,9 @@ export function locale(lang: Lang) {
   return lang === "en" ? "en-US" : "ja-JP";
 }
 
-const displayNames = new Map<Lang, Intl.DisplayNames | null>();
-/** Country name in the UI language. */
+/** Country name in the UI language (one implementation for the whole app, see src/lib/countries.ts). */
 export function countryName(code: string, lang: Lang): string {
-  if (!displayNames.has(lang)) {
-    try {
-      displayNames.set(lang, new Intl.DisplayNames([lang], { type: "region", style: "short" }));
-    } catch {
-      displayNames.set(lang, null);
-    }
-  }
-  try {
-    return displayNames.get(lang)?.of(code) ?? code;
-  } catch {
-    return code;
-  }
+  return getCountryName(code, lang);
 }
 
 /** English versions of the validation / storage messages (the data layer speaks Japanese). */
