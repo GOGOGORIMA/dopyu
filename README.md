@@ -165,6 +165,11 @@ Cloudflare の新しい「Workers」プロジェクトでは、Pages の代わ�
 - `WORKERS_CI` が設定されるため、basePath なし（ルート配信）でビルドされます。
 - Workers Builds には Pages の `CF_PAGES_URL` に当たる変数がありません。OGP の URL が GitHub Pages を指さないよう、**Settings → Build → Variables and secrets**（ビルド時変数）に `NEXT_PUBLIC_SITE_URL`（例: `https://dopyu.<subdomain>.workers.dev` か独自ドメイン）を設定してください。
 - `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` / `NEXT_PUBLIC_TURNSTILE_SITE_KEY` も同じ「ビルド時変数」に設定します。ランタイムの Variables ではビルドに反映されません。
+- または、リポジトリにコミット済みの **`.env.production`** に書いても反映されます。
+  - 値はすべてブラウザに公開される前提のものです。`service_role` キーや Turnstile のシークレットキーは絶対に書かないでください。
+  - 空の値は「未設定」として扱われます。Supabase の値が空なら、従来どおり localStorage だけのモードでビルドされます。
+  - ビルド環境の変数（Cloudflare のビルド時変数や GitHub Actions の `env`）は、このファイルより優先されます。
+  - このファイルは GitHub Pages のビルドにも読み込まれます。Supabase の値を入れると GitHub Pages 版も同じ Supabase に接続します（サイト URL はワークフローが渡す値が優先されます）。
 - `npx wrangler deploy --dry-run` と `npx wrangler dev` で、設定・ルーティング・404・ヘッダーを確認済みです。
 
 ### ボット対策（Cloudflare Turnstile）
