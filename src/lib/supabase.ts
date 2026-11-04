@@ -58,8 +58,13 @@ export type RemoteProfile = {
   birthDate: string | null;
 };
 
+export const CAPTCHA_FAILED_MESSAGE = "ボット対策の確認に失敗しました。もう一度チェックしてから送信してください";
+
 function fail(error: { message: string } | null, fallback: string): never | void {
-  if (error) throw new Error(`${fallback}（${error.message}）`);
+  if (!error) return;
+  // Supabase CAPTCHA protection (Turnstile) rejected or did not receive the token
+  if (/captcha/i.test(error.message)) throw new Error(CAPTCHA_FAILED_MESSAGE);
+  throw new Error(`${fallback}（${error.message}）`);
 }
 
 /** Sign up, then create the public profile (username, country, preset icon ID) and the owner-only birth date row. */
@@ -70,11 +75,17 @@ export async function remoteSignUp(input: {
   countryCode: string;
   birthDate: string;
   avatar: string | null;
+  /** Cloudflare Turnstile token (verified by Supabase Auth when CAPTCHA protection is on) */
+  captchaToken?: string;
 }): Promise<RemoteProfile & { birthDate: string }> {
   const sb = getSupabase()!;
   const { data: taken } = await sb.from("profiles").select("id").eq("username", input.username).maybeSingle();
   if (taken) throw new Error("このユーザーネームは既に使われています");
-  const { data, error } = await sb.auth.signUp({ email: input.email, password: input.password });
+  const { data, error } = await sb.auth.signUp({
+    email: input.email,
+    password: input.password,
+    options: { captchaToken: input.captchaToken },
+  });
   fail(error, "登録に失敗しました");
   if (!data.session || !data.user) {
     throw new Error("確認メールを送信しました。メール内のリンクで認証してからログインしてください");
@@ -129,9 +140,10 @@ async function fetchOwnData(sb: SupabaseClient, id: string, email: string): Prom
 }
 
 /** Sign in and download the user's profile and competition records. */
-export async function remoteSignIn(email: string, password: string): Promise<RemoteAccountData> {
+export async function remoteSignIn(email: string, password: string, captchaToken?: string): Promise<RemoteAccountData> {
   const sb = getSupabase()!;
-  const { data, error } = await sb.auth.signInWithPassword({ email, password });
+  const { data, error } = await sb.auth.signInWithPassword({ email, password, options: { captchaToken } });
+  if (error && /captcha/i.test(error.message)) throw new Error(CAPTCHA_FAILED_MESSAGE);
   if (error || !data.user) throw new Error("メールアドレスまたはパスワードが正しくありません");
   try {
     return await fetchOwnData(sb, data.user.id, email);

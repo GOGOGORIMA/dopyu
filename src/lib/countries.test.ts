@@ -18,6 +18,12 @@ describe("country names", () => {
     );
   });
 
+  it("never shows a bare code as the name (e.g. \"US (US)\")", () => {
+    for (const lang of ["ja", "en"] as const) {
+      for (const { code, name } of getCountryOptions(lang)) assert.notEqual(name, code, `${lang}:${code}`);
+    }
+  });
+
   it("no country option contains 本土 / mainland / SAR wording", () => {
     for (const lang of ["ja", "en"] as const) {
       for (const { name } of getCountryOptions(lang)) {

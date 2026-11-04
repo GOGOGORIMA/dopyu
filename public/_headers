@@ -1,7 +1,14 @@
 # Cloudflare Pages security headers (copied to out/_headers by `next build`).
 # GitHub Pages ignores this file.
+#
+# Content-Security-Policy allows only what the app needs:
+#   script / frame  challenges.cloudflare.com   Cloudflare Turnstile (bot check on sign-up / login)
+#   script          static.cloudflareinsights.com  Cloudflare Web Analytics (if enabled)
+#   connect         *.supabase.co (https + wss)  Supabase API / Realtime
+#   'unsafe-inline' for scripts is required by Next.js static export (inline bootstrap data, no nonces).
 /*
   X-Frame-Options: DENY
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=()
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://static.cloudflareinsights.com; frame-src https://challenges.cloudflare.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://challenges.cloudflare.com https://cloudflareinsights.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'

@@ -138,11 +138,34 @@ basePath（CSS・JS・画像・リンクの接頭辞）:
 - ビルドコマンドは `npm run build`、出力ディレクトリは `out` にします。Node.js のバージョンは `.node-version`（22）で指定しています。
 - `CF_PAGES` が自動で設定されるため、basePath なし（ルート配信）でビルドされます。
 - `CF_PAGES_URL` はデプロイごとの URL（`https://<hash>.<project>.pages.dev`）です。本番ドメインや独自ドメインを OGP に使う場合は、Cloudflare の環境変数に `NEXT_PUBLIC_SITE_URL`（例: `https://dopyu.pages.dev`）を設定してください。
+- 環境変数 `NEXT_PUBLIC_TURNSTILE_SITE_KEY` に Cloudflare Turnstile のサイトキーを設定します（下記「ボット対策」）。
 - セキュリティヘッダーは `public/_headers` に書いてあり、ビルドで `out/_headers` にコピーされます（Cloudflare Pages が全ページに付与します。GitHub Pages では無視されます）。
   - `X-Frame-Options: DENY`（クリックジャッキング対策）
   - `X-Content-Type-Options: nosniff`（MIME スニッフィング対策）
   - `Referrer-Policy: strict-origin-when-cross-origin`
   - `Permissions-Policy: camera=(), microphone=(), geolocation=()`
+  - `Content-Security-Policy`: 自サイト以外に許可しているのは次の 3 つだけです。
+    - Turnstile（`challenges.cloudflare.com` のスクリプトと iframe）
+    - Supabase（`*.supabase.co` の https / wss）
+    - Cloudflare Web Analytics
+    - Next.js の静的書き出しはインラインの起動スクリプトを使うため、`script-src` に `'unsafe-inline'` を含めています。
+
+### ボット対策（Cloudflare Turnstile）
+
+- 新規登録フォームの送信ボタンの直上に Turnstile（「ロボットではありません」のチェック）を表示します（`src/components/turnstile.tsx`）。
+  - 表示言語はアプリの言語（ja / en）に合わせて切り替わります。
+  - トークンが発行されるまで「登録する」ボタンは押せません。期限切れ・エラー・言語切り替えのときはトークンを破棄して、再びロックします。
+  - 送信に失敗したときは、トークンが使い捨てなのでウィジェットをリセットします。
+- サイトキーは `NEXT_PUBLIC_TURNSTILE_SITE_KEY` から読み込みます。
+  - 未設定のとき（ローカル開発や GitHub Pages）は、Cloudflare 公式のテスト用キー `1x00000000000000000000AA`（常に成功）を使い、ウィジェット自体は実際に表示・動作します。
+- Supabase 連携時は `supabase.auth.signUp({ options: { captchaToken } })` でトークンを送り、Supabase 側で検証します。
+  - Supabase の CAPTCHA 保護はログインにも適用されるため、Supabase 利用時はログインフォームにも Turnstile を表示し、`signInWithPassword` にトークンを渡します。
+  - パスワードが公開されている共有デモアカウントは、Supabase 利用時は表示しません（ローカル版のみ）。
+- 本番の設定手順:
+  1. Cloudflare ダッシュボード → Turnstile でウィジェットを作成し、ホスト名に本番ドメイン（`<project>.pages.dev` など）を登録します。
+  2. 発行された **サイトキー** を Cloudflare Pages の環境変数 `NEXT_PUBLIC_TURNSTILE_SITE_KEY` に設定し、再デプロイします。
+  3. **シークレットキー** を Supabase → Authentication → Attack Protection（Bot and Abuse Protection）→ Enable CAPTCHA protection → Provider: Turnstile に設定します。
+  - テスト用キーのトークンは本物のシークレットキーでは検証に失敗します。必ず 1 と 2 をセットで行ってください。
 
 ### OGP / X（Twitter）カード
 

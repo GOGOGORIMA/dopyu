@@ -40,6 +40,8 @@ export const COUNTRY_NAME_OVERRIDES: Readonly<Record<string, { ja: string; en: s
   HK: { ja: "香港", en: "Hong Kong" },
   MO: { ja: "マカオ", en: "Macao" },
   TW: { ja: "台湾", en: "Taiwan" },
+  // The English short form is just "US", which would read "US (US)" in the select list
+  US: { ja: "アメリカ", en: "United States" },
 };
 
 /** Country name (Japanese by default). Falls back to the code if the runtime has no name data. */

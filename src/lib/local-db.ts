@@ -191,6 +191,13 @@ export function toProfile(user: LocalUser, now: Date = new Date()): Profile {
   };
 }
 
+export const CAPTCHA_REQUIRED_MESSAGE = "「ロボットではありません」の確認を完了してください";
+
+/** Turnstile token from a form value (empty / missing -> undefined). */
+function captchaFrom(raw: Record<string, unknown>): string | undefined {
+  return typeof raw.captchaToken === "string" && raw.captchaToken !== "" ? raw.captchaToken : undefined;
+}
+
 export async function registerUser(
   raw: Record<string, unknown>,
   reservedUsernames: string[] = [],
@@ -208,9 +215,13 @@ export async function registerUser(
   if (Object.keys(fieldErrors).length > 0) throw new FormError("既に使われている項目があります", fieldErrors);
 
   if (isSupabaseEnabled) {
+    // Bot check (Cloudflare Turnstile); Supabase Auth verifies the token server-side
+    const captchaToken = captchaFrom(raw);
+    if (!captchaToken) throw new FormError(CAPTCHA_REQUIRED_MESSAGE);
     let remote;
     try {
       remote = await remoteSignUp({
+        captchaToken,
         email: input.email,
         password: input.password,
         username: input.username,
@@ -265,7 +276,7 @@ export async function loginUser(raw: Record<string, unknown>): Promise<LocalUser
     }
     let remote;
     try {
-      remote = await remoteSignIn(parsed.data.email, parsed.data.password);
+      remote = await remoteSignIn(parsed.data.email, parsed.data.password, captchaFrom(raw));
     } catch (err) {
       throw new FormError(err instanceof Error ? err.message : "ログインに失敗しました");
     }
@@ -576,6 +587,8 @@ export const DEMO_PASSWORD = "password123";
 
 /** Creates (once) a demo account with a year of sample entries, then logs in. */
 export async function loginAsDemo(generateEntries: (birthDate: Date) => LocalEntry[]): Promise<void> {
+  // A shared account with a public password must never exist on the real (Supabase) server
+  if (isSupabaseEnabled) throw new FormError("デモアカウントはオンライン版では利用できません");
   const existing = listUsers().find((u) => u.email === DEMO_EMAIL);
   if (existing) {
     await loginUser({ email: DEMO_EMAIL, password: DEMO_PASSWORD });

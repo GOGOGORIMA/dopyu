@@ -4,11 +4,13 @@ import { Cake, KeyRound, LoaderCircle, Mail, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { Turnstile } from "@/components/turnstile";
 import { Field, inputClass } from "@/components/ui/field";
 import { generateDemoEntries } from "@/lib/dummy-data";
 import { useI18n } from "@/lib/i18n";
 import { translateFieldErrors, translateMessage } from "@/lib/i18n-dict";
 import { FormError, loginAsDemo, loginUser } from "@/lib/local-db";
+import { isSupabaseEnabled } from "@/lib/supabase";
 
 /** Only allow same-site relative paths after login (prevents open redirects). */
 function safeNextPath(): string {
@@ -24,20 +26,31 @@ export function LoginForm() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   // Supabase accounts created before the birth date was stored on the server are asked for it once
   const [needsBirthDate, setNeedsBirthDate] = useState(false);
+  // Supabase CAPTCHA protection also covers sign-in, so the bot check is shown there too
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaReset, setCaptchaReset] = useState(0);
+  const captchaMissing = isSupabaseEnabled && !captchaToken;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (captchaMissing) return;
     const form = new FormData(event.currentTarget);
     setPending(true);
     setError(null);
     setFieldErrors({});
     try {
-      await loginUser({ email: form.get("email"), password: form.get("password"), birthDate: form.get("birthDate") ?? "" });
+      await loginUser({
+        email: form.get("email"),
+        password: form.get("password"),
+        birthDate: form.get("birthDate") ?? "",
+        captchaToken: captchaToken ?? "",
+      });
       router.replace(safeNextPath());
     } catch (err) {
       setError(err instanceof Error ? err.message : "ログインに失敗しました");
       setFieldErrors(err instanceof FormError ? err.fieldErrors : {});
       if (err instanceof FormError && err.fieldErrors.birthDate) setNeedsBirthDate(true);
+      if (isSupabaseEnabled) setCaptchaReset((n) => n + 1);
       setPending(false);
     }
   }
@@ -115,24 +128,29 @@ export function LoginForm() {
         </p>
       )}
 
+      {isSupabaseEnabled && <Turnstile action="login" onToken={setCaptchaToken} resetSignal={captchaReset} />}
+
       <button
         type="submit"
-        disabled={pending}
+        disabled={pending || captchaMissing}
         className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-accent font-bold text-accent-ink transition hover:brightness-110 disabled:opacity-60"
       >
         {pending && <LoaderCircle className="size-4 animate-spin" aria-hidden />}
         {t("ログイン", "Log in")}
       </button>
 
-      <button
-        type="button"
-        onClick={handleDemo}
-        disabled={pending}
-        className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-line-strong bg-surface-2 text-sm font-semibold text-ink transition hover:bg-surface-3 disabled:opacity-60"
-      >
-        <Sparkles className="size-4 text-violet" aria-hidden />
-        {t("デモアカウントで試す（サンプル記録つき）", "Try the demo account (with sample data)")}
-      </button>
+      {/* The shared demo account only exists in local (no-server) mode */}
+      {!isSupabaseEnabled && (
+        <button
+          type="button"
+          onClick={handleDemo}
+          disabled={pending}
+          className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-line-strong bg-surface-2 text-sm font-semibold text-ink transition hover:bg-surface-3 disabled:opacity-60"
+        >
+          <Sparkles className="size-4 text-violet" aria-hidden />
+          {t("デモアカウントで試す（サンプル記録つき）", "Try the demo account (with sample data)")}
+        </button>
+      )}
 
       <p className="text-center text-sm text-ink-2">
         {t("アカウントをお持ちでない方は", "No account yet?")}{" "}

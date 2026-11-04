@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { AvatarPicker } from "@/components/avatar-picker";
+import { Turnstile } from "@/components/turnstile";
 import { Field, inputClass } from "@/components/ui/field";
 import { MIN_AGE, MIN_PASSWORD_LENGTH } from "@/lib/constants";
 import type { CountryOption } from "@/lib/countries";
@@ -35,9 +36,13 @@ export function RegisterForm({ countries }: { countries: Record<"ja" | "en", Cou
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [preview, setPreview] = useState<Preview>(null);
   const [avatar, setAvatar] = useState<string | null>(null);
+  // Cloudflare Turnstile: the submit button stays locked until a token is issued
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaReset, setCaptchaReset] = useState(0);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!captchaToken) return;
     const form = new FormData(event.currentTarget);
     setPending(true);
     setError(null);
@@ -50,6 +55,7 @@ export function RegisterForm({ countries }: { countries: Record<"ja" | "en", Cou
           username: form.get("username"),
           birthDate: form.get("birthDate"),
           countryCode: form.get("countryCode"),
+          captchaToken,
         },
         // Built-in ranking users' names cannot be taken
         DUMMY_USERS.map((u) => u.username),
@@ -60,6 +66,8 @@ export function RegisterForm({ countries }: { countries: Record<"ja" | "en", Cou
       setError(err instanceof Error ? err.message : "登録に失敗しました");
       setFieldErrors(err instanceof FormError ? err.fieldErrors : {});
       setPending(false);
+      // A token can only be verified once: get a fresh one for the next attempt
+      setCaptchaReset((n) => n + 1);
     }
   }
 
@@ -162,9 +170,12 @@ export function RegisterForm({ countries }: { countries: Record<"ja" | "en", Cou
         </p>
       )}
 
+      <Turnstile action="signup" onToken={setCaptchaToken} resetSignal={captchaReset} />
+
       <button
         type="submit"
-        disabled={pending || underage}
+        disabled={pending || underage || !captchaToken}
+        title={captchaToken ? undefined : t("「ロボットではありません」の確認を完了してください", "Complete the \"I'm not a robot\" check first")}
         className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-accent font-bold text-accent-ink transition hover:brightness-110 disabled:opacity-60"
       >
         {pending && <LoaderCircle className="size-4 animate-spin" aria-hidden />}
