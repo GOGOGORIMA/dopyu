@@ -111,6 +111,17 @@ create index if not exists records_ranked_time_idx on public.records (is_ranked,
 create index if not exists records_user_time_idx on public.records (user_id, completed_at);
 
 -- ---------------------------------------------------------------------------
+-- Table privileges for the Data API roles (explicit, so this works even when the project does not
+-- auto-expose new tables). RLS below still decides which rows each user can touch.
+-- ---------------------------------------------------------------------------
+grant usage on schema public to anon, authenticated;
+revoke all on public.profiles, public.private_profiles, public.records from anon, authenticated;
+grant select on public.profiles, public.records to anon, authenticated;     -- rankings are public
+grant insert, update, delete on public.profiles to authenticated;
+grant select, insert, update, delete on public.private_profiles to authenticated;  -- never anon
+grant insert, delete on public.records to authenticated;                    -- no update: immutable
+
+-- ---------------------------------------------------------------------------
 -- Row Level Security
 -- ---------------------------------------------------------------------------
 alter table public.profiles         enable row level security;

@@ -6,7 +6,8 @@ import { getPreset } from "./avatar";
  * The server stores:
  *   profiles          (public)      user ID, username, preset icon ID, country code
  *   private_profiles  (owner only)  user ID, birth date (for the age check and volume estimate)
- *   entries           (public)      user ID, completion time (UTC), measured seconds, estimated volume (ml), isRanked
+ *   records           (public)      user ID, completion time (UTC), measured seconds, estimated volume (ml), isRanked
+ *                                   (volume_ml is confirmed by the server from the stored birth date)
  *
  * Everything else — okazu tags (Sauce), start time, ranking-exclusion reason — stays in this
  * browser's localStorage only. Icons are preset IDs only (there is no image upload).
