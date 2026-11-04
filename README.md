@@ -150,6 +150,23 @@ basePath（CSS・JS・画像・リンクの接頭辞）:
     - Cloudflare Web Analytics
     - Next.js の静的書き出しはインラインの起動スクリプトを使うため、`script-src` に `'unsafe-inline'` を含めています。
 
+### Cloudflare Workers（Workers Builds / `wrangler deploy`）
+
+Cloudflare の新しい「Workers」プロジェクトでは、Pages の代わりに `npx wrangler deploy` が実行されます。ルートの `wrangler.toml` で、ビルド済みの `./out` をそのまま静的アセット（Static Assets）として配信します。Worker のスクリプトは不要です。
+
+| 設定 | 値 |
+| --- | --- |
+| Build command | `npm run build`（`./out` を生成） |
+| Deploy command | `npx wrangler deploy` |
+| `wrangler.toml` | `name = "dopyu"`、`compatibility_date = "2026-01-01"`、`[assets] directory = "./out"` |
+
+- `/ranking` は `/ranking/` へリダイレクトして `ranking/index.html` を返します（`html_handling = "auto-trailing-slash"`）。存在しないパスには `out/404.html` を 404 で返します（`not_found_handling = "404-page"`）。
+- `out/_headers`（セキュリティヘッダーと CSP）は Workers でもそのまま適用されます。
+- `WORKERS_CI` が設定されるため、basePath なし（ルート配信）でビルドされます。
+- Workers Builds には Pages の `CF_PAGES_URL` に当たる変数がありません。OGP の URL が GitHub Pages を指さないよう、**Settings → Build → Variables and secrets**（ビルド時変数）に `NEXT_PUBLIC_SITE_URL`（例: `https://dopyu.<subdomain>.workers.dev` か独自ドメイン）を設定してください。
+- `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` / `NEXT_PUBLIC_TURNSTILE_SITE_KEY` も同じ「ビルド時変数」に設定します。ランタイムの Variables ではビルドに反映されません。
+- `npx wrangler deploy --dry-run` と `npx wrangler dev` で、設定・ルーティング・404・ヘッダーを確認済みです。
+
 ### ボット対策（Cloudflare Turnstile）
 
 - 新規登録フォームの送信ボタンの直上に Turnstile（「ロボットではありません」のチェック）を表示します（`src/components/turnstile.tsx`）。

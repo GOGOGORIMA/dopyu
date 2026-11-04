@@ -2,7 +2,8 @@
  * Build-time deployment detection (used by next.config.ts; pure functions so they can be tested).
  *
  * basePath (where the app is served from):
- *   1. Cloudflare Pages (CF_PAGES) or NEXT_PUBLIC_BASE_PATH === ""  -> ""  (root domain)
+ *   1. Cloudflare Pages (CF_PAGES), Cloudflare Workers Builds (WORKERS_CI)
+ *      or NEXT_PUBLIC_BASE_PATH === ""                               -> ""  (root domain)
  *      (a non-empty NEXT_PUBLIC_BASE_PATH such as "/app" is used as-is)
  *   2. GitHub Actions (GITHUB_ACTIONS === "true")                   -> "/<repo>" from GITHUB_REPOSITORY
  *      ("" for a "<owner>.github.io" user site, which is served from the root)
@@ -45,7 +46,7 @@ export function normalizeBasePath(value: string): string {
  * @param repository "owner/repo" to use when GITHUB_REPOSITORY is not set (e.g. parsed from the git remote)
  */
 export function resolveBasePath(env: DeployEnv, repository?: string): string {
-  if (env.CF_PAGES || env.NEXT_PUBLIC_BASE_PATH === "") return "";
+  if (env.CF_PAGES || env.WORKERS_CI || env.NEXT_PUBLIC_BASE_PATH === "") return "";
   if (env.NEXT_PUBLIC_BASE_PATH) return normalizeBasePath(env.NEXT_PUBLIC_BASE_PATH);
   if (env.GITHUB_ACTIONS === "true") {
     const { owner, name } = splitRepository(env.GITHUB_REPOSITORY || repository || DEFAULT_REPOSITORY);

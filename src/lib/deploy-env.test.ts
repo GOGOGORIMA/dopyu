@@ -7,6 +7,7 @@ describe("basePath detection", () => {
   it("Cloudflare Pages and an explicit empty NEXT_PUBLIC_BASE_PATH serve from the root", () => {
     assert.equal(resolveBasePath({ CF_PAGES: "1", GITHUB_ACTIONS: "true", GITHUB_REPOSITORY: "o/dopyu" }), "");
     assert.equal(resolveBasePath({ NEXT_PUBLIC_BASE_PATH: "", GITHUB_ACTIONS: "true", GITHUB_REPOSITORY: "o/dopyu" }), "");
+    assert.equal(resolveBasePath({ WORKERS_CI: "1", GITHUB_ACTIONS: "true", GITHUB_REPOSITORY: "o/dopyu" }), "", "Workers Builds");
   });
 
   it("GitHub Actions uses /<repo> (root for a <owner>.github.io user site)", () => {

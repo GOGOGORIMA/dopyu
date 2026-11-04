@@ -1,0 +1,14 @@
+# Cloudflare Workers (Workers Builds): serves the Next.js static export as Static Assets.
+# Build command:  npm run build      (writes ./out)
+# Deploy command: npx wrangler deploy
+# No Worker script is needed: every request is answered from ./out.
+name = "dopyu"
+compatibility_date = "2026-01-01"
+
+[assets]
+directory = "./out"
+# /ranking -> /ranking/ (served from ranking/index.html), same as the trailingSlash export
+html_handling = "auto-trailing-slash"
+# Unknown paths get out/404.html with status 404
+not_found_handling = "404-page"
+# out/_headers (security headers + CSP) is applied by Cloudflare automatically
