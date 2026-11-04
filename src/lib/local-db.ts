@@ -4,6 +4,7 @@ import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { isValidAvatar, sanitizeAvatar } from "./avatar";
 import { getCountryName } from "./countries";
 import {
+  type ConfirmedRecord,
   type RemoteEntry,
   isSupabaseEnabled,
   remoteDeleteAccount,
@@ -381,26 +382,36 @@ function mergeServerRecords(userId: string, server: RemoteEntry[]): LocalEntry[]
   return [...merged, ...pending].sort((a, b) => a.completedAt.localeCompare(b.completedAt));
 }
 
-/** Stores the server-confirmed volume for a record (it can differ if the device's birth date was stale). */
-function confirmSynced(userId: string, entryId: string, volumeMl: number | null) {
+/**
+ * Adopts what the server decided for a record (completed_at = server time, volume_ml from the stored
+ * birth date, is_ranked from the server-side rules) and clears its pending flag.
+ */
+function confirmSynced(userId: string, entryId: string, confirmed: ConfirmedRecord | null) {
   const entries = listEntries(userId);
-  const target = entries.find((e) => e.id === entryId);
-  if (!target) return;
+  if (!entries.some((e) => e.id === entryId)) return;
   writeJson(
     entriesKey(userId),
-    entries.map((e) => {
+    entries.map((e): LocalEntry => {
       if (e.id !== entryId) return e;
       const { pendingSync: _pending, ...rest } = e;
       void _pending;
-      return volumeMl === null ? rest : { ...rest, volumeMl };
+      if (!confirmed) return rest;
+      return {
+        ...rest,
+        completedAt: confirmed.completedAt,
+        volumeMl: confirmed.volumeMl,
+        isRanked: confirmed.isRanked,
+        // Keep the local reason only when both sides agree the record is not ranked
+        rankExclusion: confirmed.isRanked ? null : rest.isRanked ? null : rest.rankExclusion,
+      };
     }),
   );
   emit();
 }
 
 async function pushEntry(userId: string, entry: LocalEntry) {
-  const volumeMl = await remoteInsertEntry(userId, entry);
-  confirmSynced(userId, entry.id, volumeMl);
+  const confirmed = await remoteInsertEntry(userId, entry);
+  confirmSynced(userId, entry.id, confirmed);
 }
 
 let syncing: Promise<void> | null = null;
@@ -504,7 +515,7 @@ export function createEntry(raw: {
   };
   writeJson(entriesKey(user.id), [...history, user.remote ? { ...entry, pendingSync: true } : entry]);
   emit();
-  // The server confirms volume_ml (computed from the stored birth date) and that value is kept
+  // The server confirms completed_at, volume_ml and is_ranked (schema.sql trigger) and those values are kept
   if (user.remote) pushEntry(user.id, entry).catch(reportSyncError);
   return { entry, exclusionLabel: decision.reason ? EXCLUSION_LABEL[decision.reason] : null };
 }

@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   MAX_COMPLETED_AT_AGE_MS,
   MAX_DURATION_SECONDS,
+  MIN_DURATION_SECONDS,
   MIN_AGE,
   MIN_PASSWORD_LENGTH,
   TAMPER_TOLERANCE_SECONDS,
@@ -107,7 +108,7 @@ export const createEntrySchema = z
       durationSeconds: z
         .number({ error: "計測時間が必要です" })
         .int({ error: "計測時間が正しくありません" })
-        .min(0, { error: "計測時間が正しくありません" })
+        .min(MIN_DURATION_SECONDS, { error: "計測時間が短すぎます（1秒以上）" })
         .max(MAX_DURATION_SECONDS, { error: "計測時間が長すぎます。リセットしてやり直してください" }),
       /** Total time spent paused */
       pausedSeconds: z

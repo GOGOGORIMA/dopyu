@@ -91,6 +91,7 @@ const ERROR_EN: [RegExp | string, string][] = [
   ["計測時間が長すぎます。リセットしてやり直してください", "The session is too long. Reset and try again"],
   ["記録の削除に失敗しました", "Could not delete the record"],
   ["記録を読み込めませんでした", "Could not load your records"],
+  ["計測時間が短すぎます（1秒以上）", "The session is too short (at least 1 second)"],
   ["URLやドメイン（http, .com など）はユーザーネームに使えません", "Usernames cannot contain URLs or domains (http, .com, etc.)"],
   ["メールアドレスはユーザーネームに使えません", "Usernames cannot contain an email address"],
   ["電話番号のような数字（8桁以上）はユーザーネームに使えません", "Usernames cannot contain phone-number-like digits (8 or more)"],

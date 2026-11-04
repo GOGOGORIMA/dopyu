@@ -54,7 +54,7 @@ export type RemoteProfile = {
   countryCode: string;
   /** "preset:<id>" or null */
   avatar: string | null;
-  /** YYYY-MM-DD from the owner-only private_profiles table (null for accounts created before it was stored) */
+  /** YYYY-MM-DD from the owner-only user_private table (null for accounts created before it was stored) */
   birthDate: string | null;
 };
 
@@ -83,14 +83,14 @@ export async function remoteSignUp(input: {
   const row = toServerProfile({ id, username: input.username, countryCode: input.countryCode, avatar: input.avatar });
   const profile = await sb.from("profiles").insert(row);
   fail(profile.error, "プロフィールの作成に失敗しました");
-  const priv = await sb.from("private_profiles").insert(toServerPrivateProfile(id, input.birthDate));
+  const priv = await sb.from("user_private").insert(toServerPrivateProfile(id, input.birthDate));
   fail(priv.error, "プロフィールの作成に失敗しました");
   return {
     id,
     email: input.email,
     username: row.username!,
     countryCode: row.country_code!,
-    avatar: fromServerAvatar(row.avatar_preset),
+    avatar: fromServerAvatar(row.avatar_id),
     birthDate: input.birthDate,
   };
 }
@@ -102,7 +102,7 @@ async function fetchOwnData(sb: SupabaseClient, id: string, email: string): Prom
   const [prof, priv, recs] = await Promise.all([
     sb.from("profiles").select(SERVER_PROFILE_COLUMNS.join(", ")).eq("id", id).single<ServerProfileRow>(),
     sb
-      .from("private_profiles")
+      .from("user_private")
       .select(SERVER_PRIVATE_PROFILE_COLUMNS.join(", "))
       .eq("id", id)
       .maybeSingle<{ id: string; birth_date: string }>(),
@@ -115,13 +115,13 @@ async function fetchOwnData(sb: SupabaseClient, id: string, email: string): Prom
       email,
       username: prof.data!.username!,
       countryCode: prof.data!.country_code!,
-      avatar: fromServerAvatar(prof.data!.avatar_preset),
+      avatar: fromServerAvatar(prof.data!.avatar_id),
       birthDate: priv.data?.birth_date ?? null,
     },
     entries: recs.map((e) => ({
       id: e.id,
       completedAt: e.completed_at,
-      durationSeconds: e.duration_seconds,
+      durationSeconds: e.duration_sec,
       volumeMl: e.volume_ml,
       isRanked: e.is_ranked,
     })),
@@ -153,28 +153,35 @@ export async function remoteFetchOwnData(userId: string): Promise<RemoteAccountD
   return fetchOwnData(sb, user.id, user.email ?? "");
 }
 
-/** Stores (or replaces) the owner-only birth date. */
+/** Stores the owner-only birth date. It can be set once; the server refuses later changes. */
 export async function remoteSaveBirthDate(userId: string, birthDate: string) {
   const sb = getSupabase();
   if (!sb) return;
-  const { error } = await sb.from("private_profiles").upsert(toServerPrivateProfile(userId, birthDate));
+  const { error } = await sb.from("user_private").insert(toServerPrivateProfile(userId, birthDate));
   fail(error, "生年月日の保存に失敗しました");
 }
 
+/** Values the server decided for a new record (see enforce_record_rules() in schema.sql). */
+export type ConfirmedRecord = { completedAt: string; volumeMl: number; isRanked: boolean };
+
 /**
- * Sends the competition fields of a record (tags and other private fields are dropped by toServerEntry).
- * Resolves to the server-confirmed volume_ml.
+ * Sends a record (tags and other private fields are dropped by toServerEntry).
+ * The server overrides completed_at, volume_ml and is_ranked and may reject the insert
+ * ("Rate limit exceeded"); resolves to the confirmed values.
  */
 export async function remoteInsertEntry(
   userId: string,
   e: { id: string; completedAt: string; durationSeconds: number; volumeMl: number; isRanked: boolean },
-): Promise<number | null> {
+): Promise<ConfirmedRecord | null> {
   const sb = getSupabase();
   if (!sb) return null;
-  // The server fixes volume_ml from the stored birth date (trigger in schema.sql) and returns it
-  const { data, error } = await sb.from(RECORDS_TABLE).insert(toServerEntry(userId, e)).select("volume_ml").single<{ volume_ml: number }>();
+  const { data, error } = await sb
+    .from(RECORDS_TABLE)
+    .insert(toServerEntry(userId, e))
+    .select("completed_at, volume_ml, is_ranked")
+    .single<{ completed_at: string; volume_ml: number; is_ranked: boolean }>();
   fail(error, "記録の同期に失敗しました");
-  return data?.volume_ml ?? null;
+  return data ? { completedAt: data.completed_at, volumeMl: data.volume_ml, isRanked: data.is_ranked } : null;
 }
 
 export async function remoteDeleteEntry(entryId: string) {
@@ -188,7 +195,7 @@ export async function remoteDeleteEntry(entryId: string) {
 export async function remoteUpdateAvatar(userId: string, avatar: string | null) {
   const sb = getSupabase();
   if (!sb) return;
-  const { error } = await sb.from("profiles").update({ avatar_preset: toServerAvatar(avatar) }).eq("id", userId);
+  const { error } = await sb.from("profiles").update({ avatar_id: toServerAvatar(avatar) }).eq("id", userId);
   fail(error, "アイコンの保存に失敗しました");
 }
 
@@ -241,10 +248,10 @@ async function fetchAll<T>(table: string, columns: string, rankedOnly = false, u
 }
 
 async function refresh() {
-  type P = { id: string; username: string; country_code: string; avatar_preset: string | null };
+  type P = { id: string; username: string; country_code: string; avatar_id: string | null; created_at: string };
   type E = { user_id: string; completed_at: string; volume_ml: number };
   const [profiles, entries] = await Promise.all([
-    fetchAll<P>("profiles", "id, username, country_code, avatar_preset"),
+    fetchAll<P>("profiles", "id, username, country_code, avatar_id, created_at"),
     fetchAll<E>(RECORDS_TABLE, "user_id, completed_at, volume_ml", true),
   ]);
   const events = new Map<string, { t: number; v: number }[]>();
@@ -259,10 +266,10 @@ async function refresh() {
     return {
       id: p.id,
       username: p.username,
-      avatar: fromServerAvatar(p.avatar_preset),
+      avatar: fromServerAvatar(p.avatar_id),
       countryCode: p.country_code,
-      // No sign-up date is stored on the server: the first ranked record counts as the join date
-      joinedAt: list.reduce((min, e) => Math.min(min, e.t), now),
+      // Sign-up time (or the first ranked record, if that is earlier)
+      joinedAt: list.reduce((min, e) => Math.min(min, e.t), Math.min(now, new Date(p.created_at).getTime() || now)),
       events: list,
     };
   });

@@ -15,7 +15,9 @@ export const RANKING_DAILY_LIMIT = 5;
 /** Allowed gap (s) between measured time + paused time and the real elapsed time. */
 export const TAMPER_TOLERANCE_SECONDS = 3;
 
-/** Longest measurement accepted at all (7 days; anything longer is clearly broken data). */
-export const MAX_DURATION_SECONDS = 7 * 24 * 60 * 60;
+/** Longest measurement accepted at all (24 h; same as the DB CHECK on records.duration_sec). */
+export const MAX_DURATION_SECONDS = 24 * 60 * 60;
+/** Shortest measurement accepted (1 s; same as the DB CHECK on records.duration_sec). */
+export const MIN_DURATION_SECONDS = 1;
 /** How far back a completion time may be (allows saving after reopening the record screen). */
 export const MAX_COMPLETED_AT_AGE_MS = 7 * 24 * 60 * 60 * 1000;

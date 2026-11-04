@@ -4,26 +4,28 @@ import { getPreset } from "./avatar";
  * Whitelist of what may ever leave the device (Supabase mode).
  *
  * The server stores:
- *   profiles          (public)      user ID, username, preset icon ID, country code
- *   private_profiles  (owner only)  user ID, birth date (for the age check and volume estimate)
- *   records           (public)      user ID, completion time (UTC), measured seconds, estimated volume (ml), isRanked
- *                                   (volume_ml is confirmed by the server from the stored birth date)
+ *   profiles      (public)      user ID, username, preset icon ID (avatar_id), country code, created_at
+ *   user_private  (owner only)  user ID, birth date (for the age check and volume estimate; set once)
+ *   records       (public)      user ID, completion time, measured seconds, estimated volume (ml), isRanked
+ * For records, the server trigger overrides completed_at (now()), volume_ml and is_ranked,
+ * so the client values below are only a request; the confirmed row is read back.
  *
  * Everything else — okazu tags (Sauce), start time, ranking-exclusion reason — stays in this
  * browser's localStorage only. Icons are preset IDs only (there is no image upload).
  * Rows are always built field by field here (never by spreading a local object), so a new
  * local field can never be sent by accident.
  */
-export const SERVER_PROFILE_COLUMNS = ["id", "username", "country_code", "avatar_preset"] as const;
+/** Columns the client writes to profiles (created_at is set by the server). */
+export const SERVER_PROFILE_COLUMNS = ["id", "username", "country_code", "avatar_id"] as const;
 export const SERVER_PRIVATE_PROFILE_COLUMNS = ["id", "birth_date"] as const;
-export const SERVER_ENTRY_COLUMNS = ["id", "user_id", "completed_at", "duration_seconds", "volume_ml", "is_ranked"] as const;
+export const SERVER_ENTRY_COLUMNS = ["id", "user_id", "completed_at", "duration_sec", "volume_ml", "is_ranked"] as const;
 
 export type ServerProfileRow = Record<(typeof SERVER_PROFILE_COLUMNS)[number], string | null>;
 export type ServerEntryRow = {
   id: string;
   user_id: string;
   completed_at: string;
-  duration_seconds: number;
+  duration_sec: number;
   volume_ml: number;
   is_ranked: boolean;
 };
@@ -49,7 +51,7 @@ export function toServerProfile(input: {
     id: input.id,
     username: input.username,
     country_code: input.countryCode,
-    avatar_preset: toServerAvatar(input.avatar),
+    avatar_id: toServerAvatar(input.avatar),
   };
 }
 
@@ -61,7 +63,8 @@ export function toServerEntry(
     id: entry.id,
     user_id: userId,
     completed_at: new Date(entry.completedAt).toISOString(),
-    duration_seconds: Math.max(0, Math.round(entry.durationSeconds)),
+    // DB CHECK: 1..86400 seconds
+    duration_sec: Math.min(86_400, Math.max(1, Math.round(entry.durationSeconds))),
     volume_ml: entry.volumeMl,
     is_ranked: entry.isRanked,
   };

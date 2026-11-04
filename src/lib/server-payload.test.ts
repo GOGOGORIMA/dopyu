@@ -32,7 +32,7 @@ describe("server payload (privacy whitelist)", () => {
       id: "e1",
       user_id: "u1",
       completed_at: "2026-01-01T00:10:00.000Z",
-      duration_seconds: 600,
+      duration_sec: 600,
       volume_ml: 3.2,
       is_ranked: false,
     });
@@ -42,9 +42,9 @@ describe("server payload (privacy whitelist)", () => {
     const withImage = { id: "u1", username: "taro", countryCode: "JP", avatar: "data:image/webp;base64,AAAA", birthDate: "1990-01-01", email: "a@b.c" };
     const row = toServerProfile(withImage);
     assert.deepEqual(Object.keys(row).sort(), [...SERVER_PROFILE_COLUMNS].sort());
-    assert.equal(row.avatar_preset, null, "uploaded images are never sent");
+    assert.equal(row.avatar_id, null, "uploaded images are never sent");
     assert.ok(!JSON.stringify(row).includes("1990"));
-    assert.equal(toServerProfile({ ...withImage, avatar: "preset:cat" }).avatar_preset, "cat");
+    assert.equal(toServerProfile({ ...withImage, avatar: "preset:cat" }).avatar_id, "cat");
   });
 
   it("birth date goes only to the owner-only row, with a strict format", () => {
